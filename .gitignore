@@ -6,3 +6,6 @@ server-*.log
 tmp-smoke-samples*/
 
 object-drum-studio-*.png
+
+# Local Netlify folder
+.netlify
