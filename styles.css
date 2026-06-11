@@ -106,6 +106,28 @@ h1 {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.mode-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.mode-select select,
+.sequencer-control select {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--ink);
+  font-weight: 850;
+  padding: 0 10px;
 }
 
 .status {
@@ -216,6 +238,83 @@ body[data-status="错误"] .status i {
   color: var(--muted);
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   border-right: 1px solid var(--line);
+}
+
+.sequencer-card {
+  display: none;
+  grid-template-columns: minmax(160px, 1fr) auto minmax(150px, 220px) minmax(150px, 210px) minmax(140px, 190px);
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  border-top: 1px solid var(--line);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.86), rgba(236, 247, 250, 0.86)),
+    linear-gradient(90deg, rgba(75, 174, 216, 0.08) 1px, transparent 1px);
+  background-size: auto, 18px 18px;
+}
+
+body[data-play-mode="sequencer"] .sequencer-card {
+  display: grid;
+}
+
+.sequencer-card__title {
+  display: grid;
+  gap: 3px;
+}
+
+.sequencer-card__title strong {
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.sequencer-card__title span {
+  color: var(--muted);
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.sequencer-play {
+  min-width: 72px;
+  background: #e8fff7;
+  border-color: rgba(65, 207, 174, 0.58);
+  color: #16624f;
+}
+
+.sequencer-play.is-playing {
+  background: #f7efe0;
+  border-color: #cfbea3;
+  color: #6e4f20;
+}
+
+.sequencer-control {
+  display: grid;
+  grid-template-columns: auto minmax(80px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.sequencer-control input[type="range"] {
+  width: 100%;
+}
+
+.sequencer-control b {
+  min-width: 32px;
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  text-align: right;
+}
+
+.sequencer-control:has(select) {
+  grid-template-columns: auto minmax(120px, 1fr);
+}
+
+body[data-play-mode="sequencer"] .readout-strip span:nth-child(2),
+body[data-play-mode="sequencer"] .readout-strip span:nth-child(3) {
+  opacity: 0.45;
 }
 
 .readout-strip span:last-child {
@@ -862,6 +961,20 @@ body[data-trigger-mode="touch"] .gesture-meter {
   .topbar__actions {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .sequencer-card {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .sequencer-control,
+  .sequencer-control:has(select) {
+    grid-template-columns: 72px minmax(0, 1fr) auto;
+  }
+
+  .sequencer-control select {
+    grid-column: 2 / 4;
   }
 
   .workbench {

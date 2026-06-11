@@ -2,7 +2,7 @@
 
 [中文](./README.md) | **English**
 
-Object Drum Studio turns everyday objects, stickers, toys, stationery, or colored blobs into playable drum zones. Point a webcam at your desk, tune the object colors, then trigger Kick / Snare / Clap / Tom / Pad / Hi-hat with finger touches or taps.
+Object Drum Studio turns everyday objects, stickers, toys, stationery, or colored blobs into playable drum zones. Point a webcam at your desk, tune the object colors, then trigger Kick / Snare / Clap / Tom / Pad / Hi-hat with finger touches or taps. You can also place objects on a 16-step AR grid and turn a sheet of paper into a simple loop drum machine.
 
 Live demo: <https://electro-dig.github.io/object-drum-studio-public/>
 
@@ -11,7 +11,10 @@ Live demo: <https://electro-dig.github.io/object-drum-studio-public/>
 - Realtime webcam input and preview
 - MediaPipe hand tracking
 - Touch and Tap trigger modes, with Touch as the default
+- A 4-row by 16-step AR Step Sequencer for turning paper, notebooks, or desk areas into loop grids
+- Draggable corner handles for perspective calibration, with row-based or color-based sound mapping
 - Object/color region detection with stabilized tracking
+- Binary connected-component extraction with majority-vote color assignment to reduce split-object false triggers
 - H / S / V object rules, camera sampling, and an RGB/Hex color picker
 - Built-in Tone.js drum and Pad sounds
 - Local sample folder import and per-instrument sample assignment
@@ -44,10 +47,12 @@ There is no build step; GitHub Pages serves the static files directly from the r
 
 1. Start with the `指南` panel for the recommended flow.
 2. Click `启动` and allow camera access.
-3. Use `设置` to select a camera, mirror the view if needed, and limit the performance area.
-4. Use `物件` to sample colors for Kick / Snare / Clap, or open the color picker for manual RGB/Hex tuning.
-5. Use `Gesture` to tune dwell, noise floor, cooldown, and other gates.
-6. Use `Sound` to preview built-in sounds or import a local sample folder.
+3. Choose `实时击打模式` or `步进鼓机模式` in the top bar.
+4. Interactive mode: use `设置` to select a camera, mirror the view if needed, and limit the performance area.
+5. Sequencer mode: drag the four colored corner handles so the grid lines up with paper, a notebook, or a desk layout.
+6. Use `物件` to sample colors for Kick / Snare / Clap, or open the color picker for manual RGB/Hex tuning.
+7. Use `Gesture` to tune dwell, noise floor, cooldown, and other gates.
+8. Use `Sound` to preview built-in sounds or import a local sample folder.
 
 ## Tech Stack
 
@@ -55,7 +60,9 @@ There is no build step; GitHub Pages serves the static files directly from the r
 - Tone.js
 - Canvas 2D
 - HSV color segmentation
-- Connected-component region extraction
+- Connected-component region extraction with physical-blob majority voting
+- Perspective AR grid scanning
+- Tone.Transport 16-step playback
 - Region tracking with smoothing and missing-frame tolerance
 - Browser `localStorage` for local color and sound settings
 

@@ -217,3 +217,39 @@ test("sampleColorRuleFromRgba samples a local area and prefers bright object pix
   assert.equal(matchesColorRule(rgbToHsv(188, 224, 166), sample.rule), true);
   assert.equal(matchesColorRule(rgbToHsv(50, 54, 58), sample.rule), false);
 });
+
+test("detectColorPadsFromRgba merges adjacent pixels matching different rules into one blob", () => {
+  const width = 20;
+  const height = 10;
+  const data = rgbaFrame(width, height);
+
+  fillRect(data, width, 5, 3, 6, 4, [30, 210, 60, 255]);
+  fillRect(data, width, 11, 3, 2, 4, [180, 200, 40, 255]);
+
+  const pads = detectColorPadsFromRgba(data, width, height, {
+    minArea: 4,
+    colorRules: DEFAULT_COLOR_RULES,
+  });
+
+  assert.equal(pads.length, 1);
+  assert.equal(pads[0].instrument, "hihat");
+  assert.equal(pads[0].area, 32);
+});
+
+test("detectColorPadsFromRgba uses majority vote for the dominant rule", () => {
+  const width = 20;
+  const height = 10;
+  const data = rgbaFrame(width, height);
+
+  fillRect(data, width, 5, 3, 2, 4, [30, 210, 60, 255]);
+  fillRect(data, width, 7, 3, 6, 4, [230, 200, 40, 255]);
+
+  const pads = detectColorPadsFromRgba(data, width, height, {
+    minArea: 4,
+    colorRules: DEFAULT_COLOR_RULES,
+  });
+
+  assert.equal(pads.length, 1);
+  assert.equal(pads[0].instrument, "snare");
+  assert.equal(pads[0].area, 32);
+});

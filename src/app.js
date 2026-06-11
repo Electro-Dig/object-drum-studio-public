@@ -2,12 +2,14 @@ import {
   FilesetResolver,
   HandLandmarker,
 } from "https://esm.sh/@mediapipe/tasks-vision@0.10.14";
+import * as Tone from "https://esm.sh/tone@14.9.17";
 
 import {
   DEFAULT_COLOR_RULES,
   detectColorPadsFromRgba,
   sampleColorRuleFromRgba,
 } from "./detection/colorSegmentation.js";
+import { GridScanner } from "./detection/gridScanner.js";
 import { PadTracker } from "./detection/padTracker.js";
 import { HandStabilizer } from "./detection/handStabilizer.js";
 import { TapArbiter } from "./detection/tapArbiter.js";
@@ -57,6 +59,8 @@ const HAND_CONNECTIONS = [
 const COLOR_RULES_STORAGE_KEY = "object-drum-studio.colorRules.v1";
 const DRUM_KIT_STORAGE_KEY = "object-drum-studio.drumKit.v1";
 const TRIGGER_MODE_STORAGE_KEY = "object-drum-studio.triggerMode.v2";
+const PLAY_MODE_STORAGE_KEY = "object-drum-studio.playMode.v1";
+const GRID_CORNERS_STORAGE_KEY = "object-drum-studio.gridCorners.v1";
 const FINGER_LABELS = {
   thumb: "拇指",
   index: "食指",
@@ -70,6 +74,7 @@ const els = {
   overlay: document.querySelector("#overlay"),
   process: document.querySelector("#process"),
   start: document.querySelector("#startButton"),
+  playModeSelect: document.querySelector("#playModeSelect"),
   cameraSelect: document.querySelector("#cameraSelect"),
   mirror: document.querySelector("#mirrorToggle"),
   roiButton: document.querySelector("#roiButton"),
@@ -116,6 +121,12 @@ const els = {
   soundEditor: document.querySelector("#soundEditor"),
   sampleLibraryInput: document.querySelector("#sampleLibraryInput"),
   sampleLibraryStatus: document.querySelector("#sampleLibraryStatus"),
+  playSequencer: document.querySelector("#playSequencerButton"),
+  bpmInput: document.querySelector("#bpmInput"),
+  bpmValue: document.querySelector("#bpmValue"),
+  sequencerMappingMode: document.querySelector("#sequencerMappingMode"),
+  gridLineWeightInput: document.querySelector("#gridLineWeightInput"),
+  gridLineWeightValue: document.querySelector("#gridLineWeightValue"),
 };
 
 const state = {
@@ -145,6 +156,16 @@ const state = {
   dragStart: null,
   lastPadScanAt: 0,
   lastFrameAt: 0,
+  playMode: loadPlayMode(),
+  currentStep: 0,
+  sequencerPlaying: false,
+  gridScanner: new GridScanner({
+    corners: loadGridCorners() || undefined,
+  }),
+  gridState: null,
+  activeCorner: null,
+  bpm: 120,
+  gridLineWeight: 2.5,
 };
 
 const processCtx = els.process.getContext("2d", { willReadFrequently: true });
@@ -173,6 +194,7 @@ syncControlLabels();
 applyCameraFilter();
 syncPadLockUi();
 syncTriggerModeUi();
+syncPlayModeUi();
 wireEvents();
 populateCameras();
 
@@ -248,6 +270,24 @@ function wireEvents() {
   els.soundEditor.addEventListener("change", handleSoundFileChange);
   els.soundEditor.addEventListener("click", handleSoundClick);
   els.sampleLibraryInput.addEventListener("change", handleSampleLibraryChange);
+
+  els.playModeSelect?.addEventListener("change", () => {
+    state.playMode = els.playModeSelect.value === "sequencer" ? "sequencer" : "interactive";
+    savePlayMode();
+    syncPlayModeUi();
+    if (state.playMode !== "sequencer" && state.sequencerPlaying) {
+      toggleSequencerPlay();
+    }
+  });
+  els.playSequencer?.addEventListener("click", toggleSequencerPlay);
+  els.bpmInput?.addEventListener("input", updateBpm);
+  els.sequencerMappingMode?.addEventListener("change", () => {
+    state.gridScanner.setOptions({ mappingMode: els.sequencerMappingMode.value });
+  });
+  els.gridLineWeightInput?.addEventListener("input", () => {
+    state.gridLineWeight = Number(els.gridLineWeightInput.value) || 2.5;
+    els.gridLineWeightValue.textContent = state.gridLineWeight.toFixed(1);
+  });
 
   els.overlay.addEventListener("pointerdown", beginRoiDrag);
   els.overlay.addEventListener("pointermove", updateRoiDrag);
@@ -340,6 +380,64 @@ async function restartCamera() {
   setStatus("运行中");
 }
 
+let transportEventId = null;
+function setupSequencerTransport() {
+  if (transportEventId !== null) return;
+  Tone.Transport.bpm.value = state.bpm;
+  Tone.Transport.loop = true;
+  Tone.Transport.loopStart = 0;
+  Tone.Transport.setLoopPoints(0, `${state.gridScanner.cols} * 16n`);
+  transportEventId = Tone.Transport.scheduleRepeat((time) => {
+    if (state.playMode !== "sequencer") return;
+    const [measureText, beatText, sixteenthText] = String(Tone.Transport.position).split(":");
+    const measure = Number.parseInt(measureText, 10) || 0;
+    const beat = Number.parseInt(beatText, 10) || 0;
+    const sixteenth = Math.floor(Number.parseFloat(sixteenthText) || 0);
+    const step = ((measure * 4 + beat) * 4 + sixteenth) % state.gridScanner.cols;
+    state.currentStep = step;
+    triggerGridStep(step, time);
+  }, "16n");
+}
+
+function triggerGridStep(step, time) {
+  if (!state.gridState) return;
+  for (let row = 0; row < state.gridScanner.rows; row += 1) {
+    const cell = state.gridState[row]?.[step];
+    if (cell?.active) {
+      drumEngine.trigger(cell.instrument, 0.82, { time });
+    }
+  }
+}
+
+async function toggleSequencerPlay() {
+  if (!state.running) {
+    alert("请先点击右上角的“启动”，允许摄像头和音频引擎运行。");
+    return;
+  }
+
+  await Tone.start();
+  setupSequencerTransport();
+
+  if (state.sequencerPlaying) {
+    Tone.Transport.pause();
+    state.sequencerPlaying = false;
+    els.playSequencer.textContent = "播放";
+    els.playSequencer.classList.remove("is-playing");
+  } else {
+    Tone.Transport.bpm.value = state.bpm;
+    Tone.Transport.start();
+    state.sequencerPlaying = true;
+    els.playSequencer.textContent = "暂停";
+    els.playSequencer.classList.add("is-playing");
+  }
+}
+
+function updateBpm() {
+  state.bpm = Number.parseInt(els.bpmInput.value, 10) || 120;
+  els.bpmValue.textContent = String(state.bpm);
+  Tone.Transport.bpm.value = state.bpm;
+}
+
 function stopCamera() {
   if (!state.stream) return;
   state.stream.getTracks().forEach((track) => track.stop());
@@ -353,13 +451,22 @@ function loop(now) {
     resizeProcessCanvas();
     resizeOverlay();
     drawVideoToProcessCanvas();
-    detectHands(now);
-    scanPads(now);
-    processTaps(now);
+    if (state.playMode === "sequencer") {
+      scanGrid();
+    } else {
+      detectHands(now);
+      scanPads(now);
+      processTaps(now);
+    }
     drawOverlay(now);
     updateStats();
   }
   requestAnimationFrame(loop);
+}
+
+function scanGrid() {
+  const image = processCtx.getImageData(0, 0, els.process.width, els.process.height);
+  state.gridState = state.gridScanner.scan(image.data, image.width, image.height, state.colorRules);
 }
 
 function resizeProcessCanvas() {
@@ -517,17 +624,99 @@ function drawOverlay(now) {
   const ratio = window.devicePixelRatio || 1;
   const width = els.overlay.width;
   const height = els.overlay.height;
-  const feedbackByPad = padFeedbackById(tapArbiter.getPadFeedback(state.pads, now));
   overlayCtx.setTransform(1, 0, 0, 1, 0, 0);
   overlayCtx.clearRect(0, 0, width, height);
   overlayCtx.lineCap = "round";
   overlayCtx.lineJoin = "round";
 
-  drawRoi(width, height);
-  for (const pad of state.pads) drawPad(pad, width, height, feedbackByPad.get(pad.id));
-  for (const [index, hand] of state.hands.entries()) drawHand(hand, width, height, state.handStates[index]);
-  drawRecentHits(now, width, height, ratio);
-  drawSamplingPreview(width, height);
+  if (state.playMode === "sequencer") {
+    drawSequencerGrid(width, height);
+  } else {
+    const feedbackByPad = padFeedbackById(tapArbiter.getPadFeedback(state.pads, now));
+    drawRoi(width, height);
+    for (const pad of state.pads) drawPad(pad, width, height, feedbackByPad.get(pad.id));
+    for (const [index, hand] of state.hands.entries()) drawHand(hand, width, height, state.handStates[index]);
+    drawRecentHits(now, width, height, ratio);
+    drawSamplingPreview(width, height);
+  }
+}
+
+function drawSequencerGrid(width, height) {
+  const scanner = state.gridScanner;
+  const lineWeight = state.gridLineWeight || 2.5;
+  for (let row = 0; row < scanner.rows; row += 1) {
+    for (let col = 0; col < scanner.cols; col += 1) {
+      const poly = scanner.getCellPolygon(col, row);
+      const cellState = state.gridState?.[row]?.[col];
+      const stepIsCurrent = state.sequencerPlaying && col === state.currentStep;
+
+      overlayCtx.beginPath();
+      overlayCtx.moveTo(poly.tl.x * width, poly.tl.y * height);
+      overlayCtx.lineTo(poly.tr.x * width, poly.tr.y * height);
+      overlayCtx.lineTo(poly.br.x * width, poly.br.y * height);
+      overlayCtx.lineTo(poly.bl.x * width, poly.bl.y * height);
+      overlayCtx.closePath();
+
+      if (cellState?.active) {
+        const color = instrumentMeta(cellState.instrument).color;
+        const rgb = hexToRgb(color);
+        overlayCtx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${stepIsCurrent ? 0.72 : 0.42})`;
+        overlayCtx.fill();
+      } else if (stepIsCurrent) {
+        overlayCtx.fillStyle = "rgba(255, 255, 255, 0.08)";
+        overlayCtx.fill();
+      }
+
+      overlayCtx.strokeStyle = stepIsCurrent ? "rgba(0, 0, 0, 0.62)" : "rgba(0, 0, 0, 0.34)";
+      overlayCtx.lineWidth = lineWeight * (stepIsCurrent ? 1.35 : 1);
+      overlayCtx.stroke();
+      overlayCtx.strokeStyle = stepIsCurrent ? "#ffffff" : "rgba(255, 255, 255, 0.78)";
+      overlayCtx.lineWidth = Math.max(1, lineWeight * 0.42);
+      overlayCtx.stroke();
+    }
+  }
+
+  if (state.sequencerPlaying) {
+    const progress = Tone.Transport.progress;
+    overlayCtx.save();
+    overlayCtx.beginPath();
+    for (let i = 0; i <= 10; i += 1) {
+      const point = scanner.evaluatePoint(progress, i / 10);
+      if (i === 0) overlayCtx.moveTo(point.x * width, point.y * height);
+      else overlayCtx.lineTo(point.x * width, point.y * height);
+    }
+    overlayCtx.strokeStyle = "rgba(0, 0, 0, 0.35)";
+    overlayCtx.lineWidth = 5;
+    overlayCtx.stroke();
+    overlayCtx.strokeStyle = "#4baed8";
+    overlayCtx.shadowColor = "#4baed8";
+    overlayCtx.shadowBlur = 12;
+    overlayCtx.lineWidth = 2.5;
+    overlayCtx.stroke();
+    overlayCtx.restore();
+  }
+
+  const cornerColors = {
+    tl: "#f05d67",
+    tr: "#f2c84b",
+    br: "#41cfae",
+    bl: "#4baed8",
+  };
+  for (const name of ["tl", "tr", "br", "bl"]) {
+    const point = scanner.corners[name];
+    const active = state.activeCorner === name;
+    overlayCtx.save();
+    overlayCtx.beginPath();
+    overlayCtx.arc(point.x * width, point.y * height, active ? 10 : 8, 0, Math.PI * 2);
+    overlayCtx.fillStyle = cornerColors[name];
+    overlayCtx.shadowColor = cornerColors[name];
+    overlayCtx.shadowBlur = active ? 12 : 6;
+    overlayCtx.fill();
+    overlayCtx.strokeStyle = "#ffffff";
+    overlayCtx.lineWidth = 2;
+    overlayCtx.stroke();
+    overlayCtx.restore();
+  }
 }
 
 function drawPad(pad, width, height, feedback = null) {
@@ -685,18 +874,42 @@ function drawSamplingPreview(width, height) {
 }
 
 function beginRoiDrag(event) {
+  const point = eventToNorm(event);
+  const ratio = window.devicePixelRatio || 1;
+  const overlayWidth = els.overlay.width / ratio;
+  const overlayHeight = els.overlay.height / ratio;
+
+  if (state.playMode === "sequencer") {
+    const corner = getActiveCornerAtPoint(point, overlayWidth, overlayHeight);
+    if (corner) {
+      els.overlay.setPointerCapture(event.pointerId);
+      state.activeCorner = corner;
+    }
+    return;
+  }
+
   if (state.samplingRuleId) {
     beginColorSampling(event);
     return;
   }
   if (!state.roiMode) return;
   els.overlay.setPointerCapture(event.pointerId);
-  const point = eventToNorm(event);
   state.dragStart = point;
   state.roiDraft = { x: point.x, y: point.y, width: 0.001, height: 0.001 };
 }
 
 function updateRoiDrag(event) {
+  if (state.playMode === "sequencer") {
+    if (state.activeCorner) {
+      const point = eventToNorm(event);
+      state.gridScanner.corners[state.activeCorner] = {
+        x: clamp(point.x, 0, 1),
+        y: clamp(point.y, 0, 1),
+      };
+    }
+    return;
+  }
+
   if (state.samplingRuleId) {
     updateColorSamplingPreview(event);
     return;
@@ -707,6 +920,17 @@ function updateRoiDrag(event) {
 }
 
 function endRoiDrag(event) {
+  if (state.playMode === "sequencer") {
+    if (state.activeCorner) {
+      try {
+        els.overlay.releasePointerCapture(event.pointerId);
+      } catch {}
+      state.activeCorner = null;
+      saveGridCorners();
+    }
+    return;
+  }
+
   if (state.samplingRuleId) {
     commitColorSample(event);
     return;
@@ -721,7 +945,17 @@ function endRoiDrag(event) {
   state.dragStart = null;
 }
 
-function cancelRoiDrag() {
+function cancelRoiDrag(event) {
+  if (state.playMode === "sequencer") {
+    if (state.activeCorner) {
+      try {
+        els.overlay.releasePointerCapture(event.pointerId);
+      } catch {}
+      state.activeCorner = null;
+    }
+    return;
+  }
+
   if (state.samplingRuleId) {
     state.samplingPreview = null;
     updateSamplingStatus();
@@ -729,6 +963,17 @@ function cancelRoiDrag() {
   }
   state.roiDraft = null;
   state.dragStart = null;
+}
+
+function getActiveCornerAtPoint(point, width, height) {
+  const threshold = 24;
+  for (const name of ["tl", "tr", "br", "bl"]) {
+    const corner = state.gridScanner.corners[name];
+    const dx = (point.x - corner.x) * width;
+    const dy = (point.y - corner.y) * height;
+    if (Math.hypot(dx, dy) < threshold) return name;
+  }
+  return null;
 }
 
 function eventToNorm(event) {
@@ -1462,6 +1707,32 @@ function loadTriggerMode() {
   }
 }
 
+function loadPlayMode() {
+  try {
+    return localStorage.getItem(PLAY_MODE_STORAGE_KEY) === "sequencer" ? "sequencer" : "interactive";
+  } catch {
+    return "interactive";
+  }
+}
+
+function savePlayMode() {
+  localStorage.setItem(PLAY_MODE_STORAGE_KEY, state.playMode);
+}
+
+function loadGridCorners() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(GRID_CORNERS_STORAGE_KEY) || "null");
+    if (!parsed?.tl || !parsed?.tr || !parsed?.br || !parsed?.bl) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveGridCorners() {
+  localStorage.setItem(GRID_CORNERS_STORAGE_KEY, JSON.stringify(state.gridScanner.corners));
+}
+
 function saveTriggerMode() {
   localStorage.setItem(TRIGGER_MODE_STORAGE_KEY, state.triggerMode);
 }
@@ -1470,6 +1741,20 @@ function syncTriggerModeUi() {
   els.triggerMode.value = state.triggerMode;
   document.body.dataset.triggerMode = state.triggerMode;
   tapArbiter.setOptions(readTapArbiterOptions());
+}
+
+function syncPlayModeUi() {
+  document.body.dataset.playMode = state.playMode;
+  if (els.playModeSelect) els.playModeSelect.value = state.playMode;
+  if (els.sequencerMappingMode) els.sequencerMappingMode.value = state.gridScanner.mappingMode;
+  if (els.bpmInput) {
+    state.bpm = Number.parseInt(els.bpmInput.value, 10) || state.bpm;
+    els.bpmValue.textContent = String(state.bpm);
+  }
+  if (els.gridLineWeightInput) {
+    state.gridLineWeight = Number(els.gridLineWeightInput.value) || state.gridLineWeight;
+    els.gridLineWeightValue.textContent = state.gridLineWeight.toFixed(1);
+  }
 }
 
 function setPadLock(locked) {
@@ -1525,6 +1810,16 @@ function ruleToHex(rule = {}) {
 
 function toHexByte(value) {
   return Math.round(clamp(value, 0, 1) * 255).toString(16).padStart(2, "0");
+}
+
+function hexToRgb(hex) {
+  const normalized = normalizeHexColor(hex || "#68c8ff").replace("#", "");
+  const value = Number.parseInt(normalized, 16);
+  return {
+    r: (value >> 16) & 255,
+    g: (value >> 8) & 255,
+    b: value & 255,
+  };
 }
 
 function escapeHtml(value) {

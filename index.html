@@ -7,14 +7,21 @@
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="./styles.css" />
   </head>
-  <body data-status="idle" data-active-tab="guide">
+  <body data-status="idle" data-active-tab="guide" data-play-mode="interactive">
     <main class="shell">
       <header class="topbar">
         <div>
           <h1>Object Drum Studio</h1>
-          <p>日常物件 · Finger Tap · Browser Drum Machine</p>
+          <p>日常物件 · AR Step Sequencer · Browser Drum Machine</p>
         </div>
         <div class="topbar__actions">
+          <label class="mode-select">
+            <span>模式</span>
+            <select id="playModeSelect">
+              <option value="interactive">实时击打模式</option>
+              <option value="sequencer">步进鼓机模式</option>
+            </select>
+          </label>
           <span class="status"><i></i><b id="status">待启动</b></span>
           <button id="startButton" class="primary-button" type="button">启动</button>
         </div>
@@ -30,6 +37,30 @@
             <span>物件 <b id="padsCount">0</b></span>
             <span>手部 <b id="handsCount">0</b></span>
             <span>触发信号 <b id="signal">0.000</b></span>
+          </div>
+          <div class="sequencer-card">
+            <div class="sequencer-card__title">
+              <strong>步进音序控制</strong>
+              <span>4 行 × 16 步 AR loop</span>
+            </div>
+            <button id="playSequencerButton" class="sequencer-play" type="button">播放</button>
+            <label class="sequencer-control">
+              <span>速度</span>
+              <input id="bpmInput" type="range" min="60" max="220" step="1" value="120" />
+              <b id="bpmValue">120</b>
+            </label>
+            <label class="sequencer-control">
+              <span>映射</span>
+              <select id="sequencerMappingMode">
+                <option value="row">按行固定音色</option>
+                <option value="color">按颜色决定音色</option>
+              </select>
+            </label>
+            <label class="sequencer-control">
+              <span>网格线</span>
+              <input id="gridLineWeightInput" type="range" min="1" max="6" step="0.5" value="2.5" />
+              <b id="gridLineWeightValue">2.5</b>
+            </label>
           </div>
         </div>
 
@@ -51,10 +82,11 @@
               </div>
               <ol class="guide-list">
                 <li>点击右上角“启动”，允许浏览器使用摄像头。</li>
-                <li>在“设置”里选择摄像头，必要时打开镜像，并框选桌面演奏区域。</li>
-                <li>在“物件”里为 Kick / Snare / Clap 等音色取色或打开色板微调。</li>
-                <li>默认使用 Touch 模式：手指停留在物件区域上会触发，适合普通摄像头。</li>
-                <li>如果误触发，优先提高 Gesture 里的冷却时间、Dwell 或噪声门。</li>
+                <li>在顶栏选择“实时击打模式”或“步进鼓机模式”。</li>
+                <li>实时击打：选择摄像头、框选桌面区域，再用手指敲击或触碰彩色物件。</li>
+                <li>步进鼓机：拖动画面中的四个彩色角点，让 16 步网格对齐 A4 纸或笔记本。</li>
+                <li>把彩色物件放在格子里，点击下方“播放”，播放头经过该列时自动触发。</li>
+                <li>如果识别不准，先在“物件”取色或微调颜色规则，再调节 Gesture 阈值。</li>
               </ol>
             </div>
 
@@ -72,6 +104,8 @@
                 <dd>按住画面拖到目标物件的亮色区域，松开后应用到当前音色。</dd>
                 <dt>打开色板</dt>
                 <dd>用 RGB/Hex 色板选色，系统会自动换算成 H / S / V 识别规则。</dd>
+                <dt>步进鼓机</dt>
+                <dd>横向是 16 步时间，纵向默认对应 Kick / Snare / Hi-hat / Clap；也可以改为按颜色决定音色。</dd>
                 <dt>Sample Library</dt>
                 <dd>导入本地音色文件夹，文件不会上传，只在浏览器里使用。</dd>
               </dl>

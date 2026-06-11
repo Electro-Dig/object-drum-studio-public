@@ -161,26 +161,27 @@ export class DrumEngine {
 
     const v = Math.max(0.25, Math.min(1, velocity));
     const setting = this.settings[instrument] || {};
+    const time = options.time;
     const samplePlayer = this.samplePlayers.get(instrument);
     if (samplePlayer?.loaded) {
       this.lastSource = "sample";
-      samplePlayer.stop();
+      samplePlayer.stop(time);
       samplePlayer.playbackRate = semitonesToRate(setting.pitch || 0);
       samplePlayer.volume.value = (setting.volumeDb || 0) + velocityToDb(v);
-      samplePlayer.start(undefined, 0, setting.decay || 0.7);
+      samplePlayer.start(time, 0, setting.decay || 0.7);
       return true;
     }
 
     const semitoneOffset = setting.pitch || 0;
     this.lastSource = "synth";
     if (instrument === "kick") {
-      this.kick.triggerAttackRelease(noteWithOffset("C1", semitoneOffset), "8n", undefined, v);
-      this.kickClick.triggerAttackRelease("64n", undefined, v * 0.32);
+      this.kick.triggerAttackRelease(noteWithOffset("C1", semitoneOffset), "8n", time, v);
+      this.kickClick.triggerAttackRelease("64n", time, v * 0.32);
     } else if (instrument === "snare") {
-      this.snare.triggerAttackRelease(setting.decay || 0.42, undefined, v);
-      this.snareBody.triggerAttackRelease(noteWithOffset("D2", semitoneOffset), "16n", undefined, v * 0.35);
+      this.snare.triggerAttackRelease(setting.decay || 0.42, time, v);
+      this.snareBody.triggerAttackRelease(noteWithOffset("D2", semitoneOffset), "16n", time, v * 0.35);
     } else if (instrument === "hihat") {
-      this.hihat.triggerAttackRelease(setting.decay || 0.16, undefined, v * 0.72);
+      this.hihat.triggerAttackRelease(setting.decay || 0.16, time, v * 0.72);
     } else if (instrument === "pad") {
       const notes = nextPadChordNotes(
         { kind: "pad", progression: DEFAULT_PAD_PROGRESSION },
@@ -188,11 +189,11 @@ export class DrumEngine {
         "C3",
       ).map((note) => noteWithOffset(note, semitoneOffset));
       this.pad.volume.value = setting.volumeDb || -7;
-      this.pad.triggerAttackRelease(notes, setting.decay || 1.8, undefined, v * 0.46);
+      this.pad.triggerAttackRelease(notes, setting.decay || 1.8, time, v * 0.46);
     } else if (instrument === "clap") {
-      this.clap.triggerAttackRelease(setting.decay || 0.48, undefined, v);
+      this.clap.triggerAttackRelease(setting.decay || 0.48, time, v);
     } else {
-      this.tom.triggerAttackRelease(noteWithOffset("G1", semitoneOffset), "16n", undefined, v);
+      this.tom.triggerAttackRelease(noteWithOffset("G1", semitoneOffset), "16n", time, v);
     }
     return true;
   }

@@ -116,9 +116,13 @@ export function instrumentForHue(hue) {
 export function detectColorPadsFromRgba(rgba, width, height, options = {}) {
   const opts = { ...DEFAULT_OPTIONS, ...options };
   const roi = normalizeRoi(opts.roi, width, height);
-  const mask = new Uint8Array(width * height);
-  const visited = new Uint8Array(width * height);
+  const totalPixels = width * height;
+  const mask = new Uint8Array(totalPixels);
+  const ruleMap = new Int8Array(totalPixels);
+  ruleMap.fill(-1);
+  const visited = new Uint8Array(totalPixels);
   const colorRules = normalizeColorRules(opts.colorRules);
+  const numRules = colorRules ? colorRules.length : 0;
   const excludeRects = normalizeRects(opts.excludeRects, width, height);
 
   for (let y = roi.y; y < roi.y + roi.height; y += 1) {
@@ -133,7 +137,8 @@ export function detectColorPadsFromRgba(rgba, width, height, options = {}) {
         ? findMatchingRuleIndex(hsv, colorRules, opts)
         : -1;
       if (ruleIndex >= 0) {
-        mask[pixelIndex] = ruleIndex + 1;
+        mask[pixelIndex] = 1;
+        ruleMap[pixelIndex] = ruleIndex;
       } else if (!colorRules && hsv.s >= opts.minSaturation && hsv.v >= opts.minValue) {
         mask[pixelIndex] = 1;
       }
@@ -146,11 +151,13 @@ export function detectColorPadsFromRgba(rgba, width, height, options = {}) {
       const startIndex = y * width + x;
       if (!mask[startIndex] || visited[startIndex]) continue;
 
-      const component = floodFill(mask, visited, rgba, width, height, x, y, roi);
+      const component = floodFill(mask, visited, rgba, ruleMap, numRules, width, height, x, y, roi);
       if (component.area < opts.minArea) continue;
 
       const hue = averageHue(component.hueSin, component.hueCos);
-      const rule = colorRules ? colorRules[component.maskValue - 1] : null;
+      const rule = colorRules && component.dominantRuleIndex >= 0
+        ? colorRules[component.dominantRuleIndex]
+        : null;
       const instrument = rule?.instrument || instrumentForHue(hue);
       pads.push({
         id: `pad-${pads.length + 1}`,
@@ -338,14 +345,15 @@ function pointInAnyRect(x, y, rects) {
   return false;
 }
 
-function floodFill(mask, visited, rgba, width, height, startX, startY, roi) {
+function floodFill(mask, visited, rgba, ruleMap, numRules, width, height, startX, startY, roi) {
   const stack = [startY * width + startX];
   const startIndex = startY * width + startX;
-  const maskValue = mask[startIndex];
   visited[startIndex] = 1;
+  const ruleCounts = numRules > 0 ? new Uint32Array(numRules) : null;
 
   const component = {
-    maskValue,
+    maskValue: 1,
+    dominantRuleIndex: -1,
     area: 0,
     sumX: 0,
     sumY: 0,
@@ -385,6 +393,9 @@ function floodFill(mask, visited, rgba, width, height, startX, startY, roi) {
     component.sumB += rgba[i + 2];
     component.hueSin += Math.sin(radians);
     component.hueCos += Math.cos(radians);
+    if (ruleCounts && ruleMap[index] >= 0) {
+      ruleCounts[ruleMap[index]] += 1;
+    }
 
     minX = Math.min(minX, x);
     maxX = Math.max(maxX, x);
@@ -403,12 +414,26 @@ function floodFill(mask, visited, rgba, width, height, startX, startY, roi) {
     width: maxX - minX + 1,
     height: maxY - minY + 1,
   };
+
+  if (ruleCounts) {
+    let maxCount = 0;
+    for (let ruleIndex = 0; ruleIndex < numRules; ruleIndex += 1) {
+      if (ruleCounts[ruleIndex] > maxCount) {
+        maxCount = ruleCounts[ruleIndex];
+        component.dominantRuleIndex = ruleIndex;
+      }
+    }
+    if (component.dominantRuleIndex >= 0) {
+      component.maskValue = component.dominantRuleIndex + 1;
+    }
+  }
+
   return component;
 
   function visitNeighbor(x, y) {
     if (x < roi.x || y < roi.y || x >= roiRight || y >= roiBottom) return;
     const next = y * width + x;
-    if (mask[next] !== maskValue || visited[next]) return;
+    if (!mask[next] || visited[next]) return;
     visited[next] = 1;
     stack.push(next);
   }
