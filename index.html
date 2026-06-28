@@ -20,6 +20,7 @@
             <select id="playModeSelect">
               <option value="interactive">实时击打模式</option>
               <option value="sequencer">步进鼓机模式</option>
+              <option value="lily">Lily Pad 模式</option>
             </select>
           </label>
           <span class="status"><i></i><b id="status">待启动</b></span>
@@ -60,6 +61,51 @@
               <span>网格线</span>
               <input id="gridLineWeightInput" type="range" min="1" max="6" step="0.5" value="2.5" />
               <b id="gridLineWeightValue">2.5</b>
+            </label>
+          </div>
+          <div id="lilyControls" class="lily-card">
+            <div class="lily-card__title">
+              <strong>Lily Pad 演奏</strong>
+              <span>物件池塘 · 旋律传播</span>
+            </div>
+            <div class="lily-actions">
+              <button id="lilyPlayButton" class="lily-play" type="button">播放</button>
+              <button id="lilySetSourceButton" type="button">设置起点</button>
+            </div>
+            <div class="lily-stats">
+              <span>节点 <b id="lilyNodeCount">0</b></span>
+              <span>起点 <b id="lilySourceStatus">未设</b></span>
+              <span><b id="lilyPlayStatus">待播放</b></span>
+            </div>
+            <label class="lily-control">
+              <span>玩法</span>
+              <select id="lilyMappingMode">
+                <option value="melody-instrument">单音色旋律</option>
+                <option value="color-ensemble">多音色组合</option>
+              </select>
+            </label>
+            <label class="lily-control">
+              <span>音阶</span>
+              <select id="lilyScaleSelect"></select>
+            </label>
+            <label class="lily-control">
+              <span>音色</span>
+              <select id="lilyInstrumentSelect"></select>
+            </label>
+            <label class="lily-control">
+              <span>间隔</span>
+              <input id="lilyIntervalInput" type="range" min="260" max="1400" step="20" value="700" />
+              <b id="lilyIntervalValue">700</b>
+            </label>
+            <label class="lily-control">
+              <span>连线</span>
+              <input id="lilyRangeInput" type="range" min="50" max="240" step="5" value="120" />
+              <b id="lilyRangeValue">120</b>
+            </label>
+            <label class="lily-control">
+              <span>扩散</span>
+              <input id="lilySpreadInput" type="range" min="50" max="360" step="10" value="180" />
+              <b id="lilySpreadValue">180</b>
             </label>
           </div>
         </div>

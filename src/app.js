@@ -32,6 +32,14 @@ import {
   colorRulePreviewCss,
   normalizeHexColor,
 } from "./ui/colorControls.js";
+import { melodicPresetToLilyPalette, listMelodicPresets } from "./audio/melodicPresets.js";
+import { createLilyNodesFromPads, pickLilyNodeAtPoint } from "./lily/lilyNodeMapper.js";
+import { buildLilyGraph } from "./lily/lilyGraph.js";
+import { createLilyPulseEvents } from "./lily/lilyPropagation.js";
+import { LilyVoiceEngine } from "./lily/lilyVoiceEngine.js";
+import { LILY_SCALES } from "./lily/lilyScales.js";
+import { getLilyPalette } from "./lily/lilyPalettes.js";
+import { createDefaultLilyEnsembleAssignments } from "./lily/lilyEnsembleMapping.js";
 
 const FINGER_TIPS = {
   thumb: 4,
@@ -127,6 +135,21 @@ const els = {
   sequencerMappingMode: document.querySelector("#sequencerMappingMode"),
   gridLineWeightInput: document.querySelector("#gridLineWeightInput"),
   gridLineWeightValue: document.querySelector("#gridLineWeightValue"),
+  lilyControls: document.querySelector("#lilyControls"),
+  lilyPlay: document.querySelector("#lilyPlayButton"),
+  lilySetSource: document.querySelector("#lilySetSourceButton"),
+  lilyMappingMode: document.querySelector("#lilyMappingMode"),
+  lilyScale: document.querySelector("#lilyScaleSelect"),
+  lilyInstrument: document.querySelector("#lilyInstrumentSelect"),
+  lilyInterval: document.querySelector("#lilyIntervalInput"),
+  lilyIntervalValue: document.querySelector("#lilyIntervalValue"),
+  lilyRange: document.querySelector("#lilyRangeInput"),
+  lilyRangeValue: document.querySelector("#lilyRangeValue"),
+  lilySpread: document.querySelector("#lilySpreadInput"),
+  lilySpreadValue: document.querySelector("#lilySpreadValue"),
+  lilyNodeCount: document.querySelector("#lilyNodeCount"),
+  lilySourceStatus: document.querySelector("#lilySourceStatus"),
+  lilyPlayStatus: document.querySelector("#lilyPlayStatus"),
 };
 
 const state = {
@@ -166,6 +189,19 @@ const state = {
   activeCorner: null,
   bpm: 120,
   gridLineWeight: 2.5,
+  lilyPlaying: false,
+  lilySettingSource: false,
+  lilySourceId: null,
+  lilyNodes: [],
+  lilyGraph: { nodes: [], edges: [], neighborsById: {} },
+  lilyPulseEvents: [],
+  lilyLastPulseAt: 0,
+  lilyMappingMode: "melody-instrument",
+  lilyScaleId: "minor-pentatonic",
+  lilyInstrumentId: "gemidi-marimba",
+  lilyIntervalMs: 700,
+  lilyRange: 120,
+  lilySpreadMs: 180,
 };
 
 const processCtx = els.process.getContext("2d", { willReadFrequently: true });
@@ -180,6 +216,7 @@ const handStabilizer = new HandStabilizer(readHandStabilizerOptions());
 const tapDetector = new TapDetector(readTapOptions());
 const tapArbiter = new TapArbiter(readTapArbiterOptions());
 const drumEngine = new DrumEngine(state.drumKit);
+const lilyVoiceEngine = new LilyVoiceEngine({ Tone });
 drumEngine.onSampleStatusChange = (instrument, status) => {
   if (status?.name) state.sampleNames[instrument] = status.name;
   state.sampleStatuses[instrument] = status?.loaded ? "loaded" : "queued";
@@ -190,6 +227,7 @@ drumEngine.onSampleStatusChange = (instrument, status) => {
 state.selectedRuleId = state.colorRules[0]?.id || null;
 renderColorRules();
 renderSoundKit();
+setupLilyControls();
 syncControlLabels();
 applyCameraFilter();
 syncPadLockUi();
@@ -272,11 +310,15 @@ function wireEvents() {
   els.sampleLibraryInput.addEventListener("change", handleSampleLibraryChange);
 
   els.playModeSelect?.addEventListener("change", () => {
-    state.playMode = els.playModeSelect.value === "sequencer" ? "sequencer" : "interactive";
+    const previousMode = state.playMode;
+    state.playMode = normalizePlayMode(els.playModeSelect.value);
     savePlayMode();
     syncPlayModeUi();
     if (state.playMode !== "sequencer" && state.sequencerPlaying) {
       toggleSequencerPlay();
+    }
+    if (previousMode === "lily" && state.playMode !== "lily") {
+      stopLilyPlayback();
     }
   });
   els.playSequencer?.addEventListener("click", toggleSequencerPlay);
@@ -288,6 +330,35 @@ function wireEvents() {
     state.gridLineWeight = Number(els.gridLineWeightInput.value) || 2.5;
     els.gridLineWeightValue.textContent = state.gridLineWeight.toFixed(1);
   });
+  els.lilyPlay?.addEventListener("click", toggleLilyPlay);
+  els.lilySetSource?.addEventListener("click", () => {
+    state.lilySettingSource = !state.lilySettingSource;
+    syncLilyControls();
+  });
+  els.lilyMappingMode?.addEventListener("change", () => {
+    state.lilyMappingMode = els.lilyMappingMode.value === "color-ensemble" ? "color-ensemble" : "melody-instrument";
+    updateLilyPaletteFromControls();
+    updateLilyState(performance.now());
+    syncLilyControls();
+  });
+  els.lilyScale?.addEventListener("change", () => {
+    state.lilyScaleId = els.lilyScale.value || "minor-pentatonic";
+    updateLilyState(performance.now());
+    syncLilyControls();
+  });
+  els.lilyInstrument?.addEventListener("change", () => {
+    state.lilyInstrumentId = els.lilyInstrument.value || "gemidi-marimba";
+    updateLilyPaletteFromControls();
+    updateLilyState(performance.now());
+    syncLilyControls();
+  });
+  for (const input of [els.lilyInterval, els.lilyRange, els.lilySpread]) {
+    input?.addEventListener("input", () => {
+      readLilyControls();
+      updateLilyState(performance.now());
+      syncLilyControls();
+    });
+  }
 
   els.overlay.addEventListener("pointerdown", beginRoiDrag);
   els.overlay.addEventListener("pointermove", updateRoiDrag);
@@ -438,6 +509,138 @@ function updateBpm() {
   Tone.Transport.bpm.value = state.bpm;
 }
 
+function setupLilyControls() {
+  if (els.lilyScale) {
+    els.lilyScale.innerHTML = Object.values(LILY_SCALES)
+      .map((scale) => `<option value="${scale.id}">${scale.label}</option>`)
+      .join("");
+    els.lilyScale.value = state.lilyScaleId;
+  }
+  if (els.lilyInstrument) {
+    els.lilyInstrument.innerHTML = listMelodicPresets()
+      .map((preset) => `<option value="${preset.id}">${preset.name} · ${preset.category}</option>`)
+      .join("");
+    els.lilyInstrument.value = state.lilyInstrumentId;
+  }
+  readLilyControls();
+  updateLilyPaletteFromControls();
+  syncLilyControls();
+}
+
+function readLilyControls() {
+  if (els.lilyMappingMode) {
+    state.lilyMappingMode = els.lilyMappingMode.value === "color-ensemble" ? "color-ensemble" : "melody-instrument";
+  }
+  if (els.lilyScale) state.lilyScaleId = els.lilyScale.value || state.lilyScaleId;
+  if (els.lilyInstrument) state.lilyInstrumentId = els.lilyInstrument.value || state.lilyInstrumentId;
+  if (els.lilyInterval) state.lilyIntervalMs = Number(els.lilyInterval.value) || state.lilyIntervalMs;
+  if (els.lilyRange) state.lilyRange = Number(els.lilyRange.value) || state.lilyRange;
+  if (els.lilySpread) state.lilySpreadMs = Number(els.lilySpread.value) || state.lilySpreadMs;
+}
+
+function updateLilyPaletteFromControls() {
+  readLilyControls();
+  const palette = state.lilyMappingMode === "color-ensemble"
+    ? getLilyPalette("pond-ensemble")
+    : melodicPresetToLilyPalette(state.lilyInstrumentId, { mappingMode: "melody-instrument" });
+  lilyVoiceEngine.setPalette(palette);
+}
+
+function updateLilyState(now = performance.now()) {
+  const frame = { width: els.process.width || 1, height: els.process.height || 1 };
+  const ensembleAssignments = createDefaultLilyEnsembleAssignments(state.colorRules);
+  state.lilyNodes = createLilyNodesFromPads(state.pads, frame, {
+    sourceId: state.lilySourceId,
+    mappingMode: state.lilyMappingMode,
+    scaleId: state.lilyScaleId,
+    instrumentId: state.lilyInstrumentId,
+    ensembleAssignments,
+    minOctave: 3,
+    maxOctave: 5,
+    maxNodes: 16,
+    maxAreaRatio: 0.08,
+    maxBoundsRatio: 0.44,
+    visualRadiusMin: 14,
+    visualRadiusMax: 20,
+  });
+  if (state.lilySourceId && !state.lilyNodes.some((node) => node.id === state.lilySourceId)) {
+    state.lilyPulseEvents = state.lilyPulseEvents.filter((event) => now - event.timeMs < 620);
+  }
+  state.lilyGraph = buildLilyGraph(state.lilyNodes, { range: state.lilyRange });
+  syncLilyControls();
+}
+
+async function toggleLilyPlay() {
+  if (!state.running) {
+    alert("请先点击右上角的“启动”，允许摄像头和音频引擎运行。");
+    return;
+  }
+  updateLilyPaletteFromControls();
+  await lilyVoiceEngine.start();
+  state.lilyPlaying = !state.lilyPlaying;
+  state.lilyLastPulseAt = 0;
+  syncLilyControls();
+  if (state.lilyPlaying) processLilyPlayback(performance.now());
+}
+
+function stopLilyPlayback() {
+  state.lilyPlaying = false;
+  state.lilySettingSource = false;
+  syncLilyControls();
+}
+
+function processLilyPlayback(now) {
+  if (!state.lilyPlaying || !lilyVoiceEngine.ready) return;
+  if (!state.lilySourceId || !state.lilyNodes.some((node) => node.id === state.lilySourceId)) {
+    syncLilyControls();
+    return;
+  }
+  if (state.lilyLastPulseAt && now - state.lilyLastPulseAt < state.lilyIntervalMs) return;
+
+  const events = createLilyPulseEvents(state.lilyGraph, state.lilySourceId, {
+    spreadMs: state.lilySpreadMs,
+    allowFeedback: false,
+    maxTriggers: 32,
+    maxNeighbors: 6,
+    mappingMode: state.lilyMappingMode,
+    instrumentId: state.lilyInstrumentId,
+  });
+  state.lilyLastPulseAt = now;
+  state.lilyPulseEvents = events.map((event) => ({ ...event, timeMs: now + event.delayMs }));
+  for (const event of events) {
+    lilyVoiceEngine.trigger(event, {
+      scaleId: state.lilyScaleId,
+      root: "C",
+    });
+  }
+}
+
+function syncLilyControls() {
+  if (els.lilyMappingMode) els.lilyMappingMode.value = state.lilyMappingMode;
+  if (els.lilyScale) els.lilyScale.value = state.lilyScaleId;
+  if (els.lilyInstrument) els.lilyInstrument.value = state.lilyInstrumentId;
+  if (els.lilyIntervalValue) els.lilyIntervalValue.textContent = String(state.lilyIntervalMs);
+  if (els.lilyRangeValue) els.lilyRangeValue.textContent = String(state.lilyRange);
+  if (els.lilySpreadValue) els.lilySpreadValue.textContent = String(state.lilySpreadMs);
+  if (els.lilyNodeCount) els.lilyNodeCount.textContent = String(state.lilyNodes.length);
+  if (els.lilySourceStatus) els.lilySourceStatus.textContent = lilySourceLabel();
+  if (els.lilyPlayStatus) els.lilyPlayStatus.textContent = state.lilyPlaying ? "演奏中" : "待播放";
+  if (els.lilyPlay) {
+    els.lilyPlay.textContent = state.lilyPlaying ? "停止" : "播放";
+    els.lilyPlay.classList.toggle("is-playing", state.lilyPlaying);
+  }
+  if (els.lilySetSource) {
+    els.lilySetSource.classList.toggle("is-active", state.lilySettingSource);
+    els.lilySetSource.textContent = state.lilySettingSource ? "点击圆珠" : "设置起点";
+  }
+}
+
+function lilySourceLabel() {
+  if (!state.lilySourceId) return "未设";
+  const node = state.lilyNodes.find((item) => item.id === state.lilySourceId);
+  return node ? (node.label || node.note || "已设") : "起点丢失";
+}
+
 function stopCamera() {
   if (!state.stream) return;
   state.stream.getTracks().forEach((track) => track.stop());
@@ -453,6 +656,13 @@ function loop(now) {
     drawVideoToProcessCanvas();
     if (state.playMode === "sequencer") {
       scanGrid();
+    } else if (state.playMode === "lily") {
+      state.handsRaw = [];
+      state.hands = [];
+      state.handStates = [];
+      scanPads(now);
+      updateLilyState(now);
+      processLilyPlayback(now);
     } else {
       detectHands(now);
       scanPads(now);
@@ -518,7 +728,7 @@ function scanPads(now) {
     minArea: Number(els.area.value),
     minSaturation: Number(els.sat.value),
     minValue: Number(els.val.value),
-    maxPads: 10,
+    maxPads: state.playMode === "lily" ? 16 : 10,
     roi,
     excludeRects: handExclusionRects(image.width, image.height),
     colorRules: state.colorRules,
@@ -631,6 +841,10 @@ function drawOverlay(now) {
 
   if (state.playMode === "sequencer") {
     drawSequencerGrid(width, height);
+  } else if (state.playMode === "lily") {
+    drawRoi(width, height);
+    drawLilyOverlay(now, width, height);
+    drawSamplingPreview(width, height);
   } else {
     const feedbackByPad = padFeedbackById(tapArbiter.getPadFeedback(state.pads, now));
     drawRoi(width, height);
@@ -769,6 +983,107 @@ function drawPad(pad, width, height, feedback = null) {
   }
 }
 
+function drawLilyOverlay(now, width, height) {
+  const sx = width / Math.max(1, els.process.width);
+  const sy = height / Math.max(1, els.process.height);
+  const nodeById = new Map(state.lilyNodes.map((node) => [node.id, node]));
+
+  overlayCtx.save();
+  for (const edge of state.lilyGraph.edges || []) {
+    const from = nodeById.get(edge.from);
+    const to = nodeById.get(edge.to);
+    if (!from || !to) continue;
+    drawLilyEdge(from, to, sx, sy);
+  }
+
+  state.lilyPulseEvents = state.lilyPulseEvents.filter((event) => now - event.timeMs < 900);
+  for (const event of state.lilyPulseEvents) {
+    drawLilyPulseWave(event, now, sx, sy);
+  }
+
+  for (const node of state.lilyNodes) {
+    drawLilyNode(node, sx, sy);
+  }
+  overlayCtx.restore();
+}
+
+function drawLilyEdge(from, to, sx, sy) {
+  overlayCtx.beginPath();
+  overlayCtx.moveTo(from.x * sx, from.y * sy);
+  overlayCtx.lineTo(to.x * sx, to.y * sy);
+  overlayCtx.strokeStyle = "rgba(55, 205, 205, 0.46)";
+  overlayCtx.lineWidth = 2.2;
+  overlayCtx.shadowColor = "rgba(55, 205, 205, 0.32)";
+  overlayCtx.shadowBlur = 8;
+  overlayCtx.stroke();
+  overlayCtx.shadowBlur = 0;
+}
+
+function drawLilyPulseWave(event, now, sx, sy) {
+  const node = event.node;
+  if (!node) return;
+  const age = now - event.timeMs;
+  if (age < -40) return;
+  const progress = clamp(age / 680, 0, 1);
+  const fade = 1 - progress;
+  const x = node.x * sx;
+  const y = node.y * sy;
+  const base = Math.max(14, node.radius * Math.max(sx, sy));
+  const radius = base + progress * 54;
+  const color = node.color || { r: 255, g: 255, b: 255 };
+
+  overlayCtx.beginPath();
+  overlayCtx.arc(x, y, radius, 0, Math.PI * 2);
+  overlayCtx.strokeStyle = `rgba(255, 255, 255, ${0.82 * fade})`;
+  overlayCtx.lineWidth = 3.2 * fade;
+  overlayCtx.shadowColor = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.5 * fade})`;
+  overlayCtx.shadowBlur = 10 + 18 * fade;
+  overlayCtx.stroke();
+  overlayCtx.shadowBlur = 0;
+}
+
+function drawLilyNode(node, sx, sy) {
+  const x = node.x * sx;
+  const y = node.y * sy;
+  const radius = Math.max(15, node.radius * Math.max(sx, sy));
+  const color = node.color || { r: 255, g: 255, b: 255 };
+  const isSource = node.id === state.lilySourceId;
+
+  overlayCtx.beginPath();
+  overlayCtx.arc(x, y, radius, 0, Math.PI * 2);
+  overlayCtx.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${isSource ? 0.42 : 0.28})`;
+  overlayCtx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, 0.88)`;
+  overlayCtx.lineWidth = isSource ? 4 : 2.4;
+  overlayCtx.fill();
+  overlayCtx.stroke();
+
+  overlayCtx.beginPath();
+  overlayCtx.arc(x, y, radius + 20, 0, Math.PI * 2);
+  overlayCtx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${isSource ? 0.28 : 0.16})`;
+  overlayCtx.lineWidth = isSource ? 2.2 : 1.2;
+  overlayCtx.setLineDash(isSource ? [] : [6, 8]);
+  overlayCtx.stroke();
+  overlayCtx.setLineDash([]);
+
+  if (isSource) {
+    overlayCtx.beginPath();
+    overlayCtx.arc(x, y, radius + 8, 0, Math.PI * 2);
+    overlayCtx.strokeStyle = "rgba(255, 255, 255, 0.94)";
+    overlayCtx.lineWidth = 3;
+    overlayCtx.stroke();
+  }
+
+  overlayCtx.fillStyle = "rgba(255, 255, 255, 0.95)";
+  overlayCtx.font = '800 12px "Source Han Sans SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif';
+  overlayCtx.textAlign = "center";
+  overlayCtx.textBaseline = "middle";
+  overlayCtx.fillText(node.note || node.label || "", x, y);
+  if (isSource) {
+    overlayCtx.font = "800 9px ui-monospace, SFMono-Regular, Consolas, monospace";
+    overlayCtx.fillText("SOURCE", x, y - radius - 8);
+  }
+}
+
 function drawHand(hand, width, height, handState = null) {
   const opacity = handState?.held ? 0.34 : 0.9;
   overlayCtx.strokeStyle = `rgba(135, 217, 255, ${opacity})`;
@@ -884,6 +1199,22 @@ function beginRoiDrag(event) {
     if (corner) {
       els.overlay.setPointerCapture(event.pointerId);
       state.activeCorner = corner;
+    }
+    return;
+  }
+
+  if (state.playMode === "lily" && state.lilySettingSource) {
+    const processPoint = {
+      x: point.x * els.process.width,
+      y: point.y * els.process.height,
+    };
+    const node = pickLilyNodeAtPoint(state.lilyNodes, processPoint, 34);
+    if (node) {
+      state.lilySourceId = node.id;
+      state.lilySettingSource = false;
+      state.lilyLastPulseAt = 0;
+      updateLilyState(performance.now());
+      syncLilyControls();
     }
     return;
   }
@@ -1709,10 +2040,15 @@ function loadTriggerMode() {
 
 function loadPlayMode() {
   try {
-    return localStorage.getItem(PLAY_MODE_STORAGE_KEY) === "sequencer" ? "sequencer" : "interactive";
+    return normalizePlayMode(localStorage.getItem(PLAY_MODE_STORAGE_KEY));
   } catch {
     return "interactive";
   }
+}
+
+function normalizePlayMode(mode) {
+  if (mode === "sequencer" || mode === "lily") return mode;
+  return "interactive";
 }
 
 function savePlayMode() {
@@ -1746,6 +2082,7 @@ function syncTriggerModeUi() {
 function syncPlayModeUi() {
   document.body.dataset.playMode = state.playMode;
   if (els.playModeSelect) els.playModeSelect.value = state.playMode;
+  syncLilyControls();
   if (els.sequencerMappingMode) els.sequencerMappingMode.value = state.gridScanner.mappingMode;
   if (els.bpmInput) {
     state.bpm = Number.parseInt(els.bpmInput.value, 10) || state.bpm;
