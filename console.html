@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#171713" />
+    <meta name="description" content="面向展览与活动现场的摄像头物件音效触发控制台" />
+    <title>Client Show Console · 现场触发控制台</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="stylesheet" href="./console.css" />
+  </head>
+  <body class="is-config-mode" data-runtime-state="idle">
+    <div id="consoleApp" class="console-shell">
+      <header class="topbar">
+        <a class="brand" href="./console.html" aria-label="现场触发控制台首页">
+          <span class="brand__index">01</span>
+          <span>
+            <b>SHOW / TRIGGER</b>
+            <small>现场触发控制台</small>
+          </span>
+        </a>
+
+        <div class="topbar__status" role="status" aria-live="polite">
+          <span class="status-lamp" aria-hidden="true"></span>
+          <span id="systemStatus">等待设备连接</span>
+        </div>
+
+        <div class="topbar__actions configure-only">
+          <label class="button button--quiet" for="profileImportInput">导入配置包</label>
+          <input id="profileImportInput" class="visually-hidden" type="file" accept="application/json,.json,.ods-show" />
+          <button id="exportProfileButton" class="button button--quiet" type="button">导出配置包</button>
+        </div>
+      </header>
+
+      <main class="console-layout">
+        <section class="stage-panel" aria-labelledby="stageTitle">
+          <div class="stage-heading">
+            <div>
+              <span class="eyebrow">CAMERA / FULL FRAME</span>
+              <h1 id="stageTitle">整个画面都是触发区</h1>
+            </div>
+            <div class="stage-metrics" aria-label="识别统计">
+              <span>画面物件 <b id="objectCount">0</b></span>
+              <span>本次触发 <b id="triggerCount">0</b></span>
+            </div>
+          </div>
+
+          <div id="stageViewport" class="stage-viewport">
+            <video id="cameraVideo" class="source-video" playsinline muted></video>
+            <canvas id="stageCanvas" width="960" height="540" aria-label="摄像头预览与物件识别结果"></canvas>
+            <canvas id="processCanvas" width="360" height="203" hidden></canvas>
+
+            <div id="stageIdle" class="stage-idle">
+              <span class="stage-idle__mark" aria-hidden="true">◎</span>
+              <strong>尚未连接摄像头</strong>
+              <p>连接设备后，彩色物件会在这里被框出。</p>
+            </div>
+
+            <div id="samplingHint" class="sampling-hint" hidden>
+              <span>取色中</span>
+              请点击画面中的目标物件
+            </div>
+
+            <div id="liveBanner" class="live-banner" aria-live="polite">
+              <span class="live-banner__dot" aria-hidden="true"></span>
+              <strong id="runtimeStateLabel">准备中</strong>
+              <small id="runtimeStateDetail">请先完成设备检查</small>
+            </div>
+          </div>
+
+          <div class="event-monitor">
+            <div class="event-monitor__label">
+              <span>RECENT SIGNALS</span>
+              <b>最近触发</b>
+            </div>
+            <ol id="triggerLog" class="trigger-log" aria-live="polite">
+              <li class="trigger-log__empty">还没有触发记录</li>
+            </ol>
+          </div>
+        </section>
+
+        <aside class="setup-rail configure-only" aria-label="远程配置面板">
+          <section class="rail-section rail-section--system">
+            <div class="section-number">01 / SYSTEM</div>
+            <div class="section-heading">
+              <h2>先让设备就绪</h2>
+              <p>更换电脑、摄像头或场地后，按顺序检查这三项。</p>
+            </div>
+
+            <div class="check-grid">
+              <div id="cameraCheck" class="check-item" data-ready="false">
+                <span>CAM</span>
+                <b>摄像头</b>
+                <small id="cameraCheckText">未连接</small>
+              </div>
+              <div id="audioCheck" class="check-item" data-ready="false">
+                <span>AUD</span>
+                <b>声音</b>
+                <small id="audioCheckText">未启用</small>
+              </div>
+              <div id="profileCheck" class="check-item" data-ready="true">
+                <span>MAP</span>
+                <b>映射</b>
+                <small id="profileCheckText">6 个槽位</small>
+              </div>
+            </div>
+
+            <div class="button-row">
+              <button id="startCameraButton" class="button button--primary" type="button">连接 / 更换摄像头</button>
+              <button id="armAudioButton" class="button button--secondary" type="button">启用声音</button>
+            </div>
+          </section>
+
+          <section class="rail-section">
+            <div class="section-number">02 / BEHAVIOUR</div>
+            <div class="section-heading">
+              <h2>选择触发方式</h2>
+              <p id="mappingModeHelp">每种颜色固定对应一个声音，现场最容易控制。</p>
+            </div>
+
+            <label class="field field--wide">
+              <span>映射方式</span>
+              <select id="mappingModeSelect">
+                <option value="six-color">6 色对应 6 音效</option>
+                <option value="same-color-random">同色随机音效</option>
+              </select>
+            </label>
+
+            <div class="inline-fields">
+              <label class="field">
+                <span>配置名称</span>
+                <input id="profileNameInput" type="text" maxlength="80" autocomplete="off" />
+              </label>
+              <label class="field">
+                <span>最小物件</span>
+                <input id="minAreaInput" type="range" min="12" max="800" step="4" />
+                <output id="minAreaValue">72</output>
+              </label>
+            </div>
+
+            <div class="inline-fields">
+              <label class="field">
+                <span>总音量</span>
+                <input id="masterGainInput" type="range" min="0" max="1" step="0.01" />
+                <output id="masterGainValue">82%</output>
+              </label>
+              <label class="toggle-field">
+                <input id="mirrorInput" type="checkbox" />
+                <span>镜像预览</span>
+              </label>
+            </div>
+          </section>
+
+          <section class="rail-section rail-section--slots">
+            <div class="section-number">03 / COLOUR + SOUND</div>
+            <div class="section-heading">
+              <h2>校准颜色与声音</h2>
+              <p>点击“镜头取色”后，再点击左侧画面中的目标物件。</p>
+            </div>
+            <div id="slotList" class="slot-list"></div>
+          </section>
+
+          <section class="launch-card">
+            <span class="launch-card__index">04</span>
+            <div>
+              <b>交给现场人员</b>
+              <p>进入后只保留开始、暂停、复位和音量。</p>
+            </div>
+            <button id="enterShowModeButton" class="button button--launch" type="button">进入演出模式</button>
+          </section>
+        </aside>
+      </main>
+
+      <section id="showModePanel" class="show-controls" aria-label="演出控制">
+        <div class="show-controls__identity">
+          <span>CLIENT OPERATOR</span>
+          <strong id="showProfileName">现场演出配置</strong>
+        </div>
+        <button id="liveToggleButton" class="show-action show-action--live" type="button">
+          <span class="show-action__icon" aria-hidden="true">▶</span>
+          <span><small>RUN STATE</small><b>开始运行</b></span>
+        </button>
+        <button id="runtimeResetButton" class="show-action" type="button">
+          <span class="show-action__icon" aria-hidden="true">↺</span>
+          <span><small>CLEAR STATE</small><b>复位</b></span>
+        </button>
+        <label class="show-volume">
+          <span><small>MASTER</small><b>总音量</b></span>
+          <input id="showMasterGainInput" type="range" min="0" max="1" step="0.01" />
+          <output id="showMasterGainValue">82%</output>
+        </label>
+        <button id="exitShowModeButton" class="show-action show-action--exit" type="button">
+          <span class="show-action__icon" aria-hidden="true">⌁</span>
+          <span><small>TECH ONLY</small><b>返回配置</b></span>
+        </button>
+      </section>
+
+      <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    </div>
+
+    <script type="module" src="./src/console/app.js"></script>
+  </body>
+</html>
