@@ -38,6 +38,7 @@ test("client console exposes a reduced show-mode action bar", () => {
 
 test("client console loads its own stylesheet and application module", () => {
   assert.match(html, /href="\.\/console\.css"/);
+  assert.match(html, /rel="icon" href="\.\/favicon\.svg"/);
   assert.match(html, /src="\.\/src\/console\/app\.js"/);
   assert.doesNotMatch(html, /src="\.\/src\/app\.js"/);
 });

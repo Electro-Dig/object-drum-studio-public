@@ -16,6 +16,7 @@ test("service worker caches the console shell and local runtime modules", () => 
   for (const asset of [
     "/console.html",
     "/console.css",
+    "/favicon.svg",
     "/src/console/app.js",
     "/src/console/profile.js",
     "/src/console/audioEngine.js",

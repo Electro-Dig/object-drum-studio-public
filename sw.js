@@ -1,7 +1,8 @@
-const CACHE_NAME = "client-show-console-v1";
+const CACHE_NAME = "client-show-console-v2";
 const SHELL_ASSETS = [
   "/console.html",
   "/console.css",
+  "/favicon.svg",
   "/manifest.webmanifest",
   "/index.html",
   "/src/console/app.js",
