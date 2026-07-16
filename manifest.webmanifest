@@ -1,0 +1,12 @@
+{
+  "name": "现场触发控制台 · Client Show Console",
+  "short_name": "Show Console",
+  "description": "面向展览与活动现场的摄像头物件音效触发控制台",
+  "lang": "zh-CN",
+  "start_url": "/console.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#171713",
+  "theme_color": "#171713"
+}
