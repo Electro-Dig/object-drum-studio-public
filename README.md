@@ -1,5 +1,7 @@
 # Object Drum Studio
 
+> 新版甲方现场系统：打开 `/console.html`（Netlify 根路径会自动进入），操作说明见 [现场触发控制台指南](./docs/CLIENT_CONSOLE_GUIDE.zh-CN.md)。原 Object Drum Studio 保留在 `/studio`。
+
 **中文** | [English](./README.en.md)
 
 Object Drum Studio 是一个浏览器里的日常物件鼓机：把桌面上的彩色物件、贴纸、玩具、文具或纸上色块识别成可演奏区域。你可以用手指触碰/敲击触发 Kick / Snare / Clap / Tom / Pad / Hi-hat，也可以把物件摆进 16 步 AR 网格里，让纸面变成一个简易 loop 鼓机。

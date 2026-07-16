@@ -1,5 +1,7 @@
 # Object Drum Studio
 
+> New client-facing system: open `/console.html` (the Netlify root routes there automatically). See the [Client Show Console guide](./docs/CLIENT_CONSOLE_GUIDE.zh-CN.md). The original Object Drum Studio remains available at `/studio`.
+
 [中文](./README.md) | **English**
 
 Object Drum Studio turns everyday objects, stickers, toys, stationery, or colored blobs into playable drum zones. Point a webcam at your desk, tune the object colors, then trigger Kick / Snare / Clap / Tom / Pad / Hi-hat with finger touches or taps. You can also place objects on a 16-step AR grid and turn a sheet of paper into a simple loop drum machine.

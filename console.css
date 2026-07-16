@@ -1124,7 +1124,7 @@ body.is-show-mode .live-banner strong {
   }
 
   .stage-viewport {
-    min-height: 220px;
+    min-height: 0;
   }
 
   .event-monitor {
