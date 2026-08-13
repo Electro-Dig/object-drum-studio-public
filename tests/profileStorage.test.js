@@ -18,24 +18,24 @@ function storageWith(values = {}) {
   };
 }
 
-test("new palette storage ignores the stale v2 test profile", () => {
+test("new palette storage ignores the stale v3 test profile", () => {
   const storage = storageWith({
-    "object-drum-show-console-profile-v2": JSON.stringify({
+    "object-drum-show-console-profile-v3": JSON.stringify({
       slots: [{ label: "绿色", colorHex: "#bacfd1" }],
     }),
   });
 
   const profile = loadStoredProfile(storage);
 
-  assert.equal(PROFILE_STORAGE_KEY, "object-drum-show-console-profile-v3");
+  assert.equal(PROFILE_STORAGE_KEY, "object-drum-show-console-profile-v4");
   assert.deepEqual(profile.slots.slice(0, 5).map((slot) => slot.label), [
-    "粉色", "宝蓝", "红色", "深青绿", "深蓝",
+    "粉色", "浅蓝", "红色", "深青绿", "深蓝",
   ]);
 });
 
-test("new palette storage restores a valid v3 profile", () => {
+test("new palette storage restores a valid v4 profile", () => {
   const storage = storageWith({
-    "object-drum-show-console-profile-v3": JSON.stringify({ name: "现场 A" }),
+    "object-drum-show-console-profile-v4": JSON.stringify({ name: "现场 A" }),
   });
 
   assert.equal(loadStoredProfile(storage).name, "现场 A");

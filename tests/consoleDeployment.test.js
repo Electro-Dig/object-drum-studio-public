@@ -33,7 +33,7 @@ test("service worker caches the console shell and local runtime modules", () => 
   }
   assert.match(serviceWorker, /caches\.open/);
   assert.match(serviceWorker, /event\.request\.mode === "navigate"/);
-  assert.match(serviceWorker, /client-show-console-v4-real-scene-ten-color/);
+  assert.match(serviceWorker, /client-show-console-v5-light-blue-brown-red/);
 });
 
 test("Netlify routes the site root to the console and preserves the legacy studio", () => {

@@ -6,6 +6,8 @@ const DEFAULT_OPTIONS = {
   minIoU: 0.04,
   strictRuleMatch: true,
   colorMismatchPenalty: 12,
+  maxRuleMismatchDistance: Infinity,
+  maxContinuationDistance: Infinity,
 };
 
 export class PadTracker {
@@ -118,6 +120,8 @@ function findBestTrack(candidate, tracks, options) {
 }
 
 function matchScore(candidate, trackedPad, options) {
+  const distance = pointDistance(candidate.centroid, trackedPad.centroid);
+  const iou = boundsIoU(candidate.bounds, trackedPad.bounds);
   if (
     options.strictRuleMatch &&
     candidate.ruleId &&
@@ -126,9 +130,19 @@ function matchScore(candidate, trackedPad, options) {
   ) {
     return Infinity;
   }
+  if (
+    !options.strictRuleMatch
+    && candidate.ruleId
+    && trackedPad.ruleId
+    && candidate.ruleId !== trackedPad.ruleId
+    && distance > options.maxRuleMismatchDistance
+  ) {
+    return Infinity;
+  }
+  if (distance > options.maxContinuationDistance && iou < options.minIoU) {
+    return Infinity;
+  }
 
-  const distance = pointDistance(candidate.centroid, trackedPad.centroid);
-  const iou = boundsIoU(candidate.bounds, trackedPad.bounds);
   const canMatch = distance <= options.maxMatchDistance || iou >= options.minIoU;
   if (!canMatch) return Infinity;
 

@@ -98,3 +98,65 @@ test("PadTracker can keep one geometry track when the detected color changes", (
   assert.equal(changed[0].ruleId, "sky-blue");
   assert.equal(changed[0].observedAt, 80);
 });
+
+test("PadTracker does not transfer a color identity to a different nearby object", () => {
+  const tracker = new PadTracker({
+    confirmFrames: 1,
+    strictRuleMatch: false,
+    maxMatchDistance: 64,
+    maxRuleMismatchDistance: 20,
+  });
+  tracker.update([pad("brown", 90, 50, {
+    ruleId: "brown-red",
+    instrument: "slot-6",
+  })], 0);
+
+  const pads = tracker.update([
+    pad("orange", 137, 50, { ruleId: "orange", instrument: "slot-8" }),
+  ], 80);
+
+  const orange = pads.find((candidate) => candidate.ruleId === "orange");
+  assert.equal(orange?.id, "tracked-2");
+});
+
+test("PadTracker gives a distant same-color replacement a new identity", () => {
+  const tracker = new PadTracker({
+    confirmFrames: 1,
+    strictRuleMatch: false,
+    maxMatchDistance: 64,
+    maxContinuationDistance: 30,
+  });
+  tracker.update([pad("brown-a", 90, 50, {
+    ruleId: "brown-red",
+    instrument: "slot-6",
+  })], 0);
+
+  const pads = tracker.update([pad("brown-b", 137, 50, {
+    ruleId: "brown-red",
+    instrument: "slot-6",
+  })], 80);
+
+  assert.equal(pads.find((candidate) => candidate.observedAt === 80)?.id, "tracked-2");
+});
+
+test("PadTracker keeps a moving object identity across a short color wobble", () => {
+  const tracker = new PadTracker({
+    confirmFrames: 1,
+    strictRuleMatch: false,
+    maxMatchDistance: 64,
+    maxRuleMismatchDistance: 30,
+    maxContinuationDistance: 30,
+  });
+  const first = tracker.update([pad("deep-blue", 90, 50, {
+    ruleId: "deep-blue",
+    instrument: "slot-5",
+  })], 0)[0];
+
+  const moved = tracker.update([pad("light-blue", 111, 50, {
+    ruleId: "light-blue",
+    instrument: "slot-2",
+  })], 80);
+
+  assert.equal(moved.length, 1);
+  assert.equal(moved[0].id, first.id);
+});

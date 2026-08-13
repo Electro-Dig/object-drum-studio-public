@@ -19,11 +19,11 @@ test("createDefaultProfile exposes ten immediately playable photo-matched color 
   assert.equal(new Set(profile.slots.map((slot) => slot.id)).size, 10);
   assert.deepEqual(profile.slots.map((slot) => slot.label), [
     "粉色",
-    "宝蓝",
+    "浅蓝",
     "红色",
     "深青绿",
     "深蓝",
-    "深棕",
+    "棕红",
     "紫色",
     "橙色",
     "亮黄",
@@ -31,18 +31,20 @@ test("createDefaultProfile exposes ten immediately playable photo-matched color 
   ]);
   assert.deepEqual(profile.slots.map((slot) => slot.colorHex), [
     "#ed77c0",
-    "#3b7bd4",
-    "#c0332c",
+    "#6ca6e9",
+    "#c5332d",
     "#357575",
-    "#2347d1",
-    "#595653",
+    "#4261c0",
+    "#aa4b42",
     "#692cc3",
     "#ea9f39",
-    "#f3f952",
+    "#ece847",
     "#b0e548",
   ]);
   assert.ok(profile.slots.every((slot) => slot.enabled));
   assert.ok(profile.slots.every((slot) => slot.colorRule.instrument === slot.id));
+  assert.ok(profile.slots.every((slot) => Number.isFinite(slot.colorRule.saturationCenter)));
+  assert.ok(profile.slots.every((slot) => Number.isFinite(slot.colorRule.valueCenter)));
   assert.ok(profile.slots.every((slot) => slot.fallbackVoice));
 });
 
@@ -123,6 +125,7 @@ test("legacy color rules without a saturation ceiling remain unrestricted after 
     mappingMode: "six-color",
     slots: Array.from({ length: 6 }, (_, index) => ({
       id: `legacy-${index + 1}`,
+      colorHex: index === 5 ? "#a968d4" : undefined,
       colorRule: {
         id: `legacy-${index + 1}-color`,
         hueCenter: index === 5 ? 264 : index * 40,
@@ -135,6 +138,8 @@ test("legacy color rules without a saturation ceiling remain unrestricted after 
   });
 
   assert.equal(profile.slots[5].colorRule.maxSaturation, 1);
+  assert.ok(Math.abs(profile.slots[5].colorRule.saturationCenter - 0.509) < 0.01);
+  assert.ok(Math.abs(profile.slots[5].colorRule.valueCenter - 0.831) < 0.01);
 });
 
 test("validateShowPackage normalizes a supported package and rejects unsupported schemas", () => {

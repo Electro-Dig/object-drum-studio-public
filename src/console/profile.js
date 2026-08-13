@@ -11,14 +11,14 @@ const SLOT_COUNT = 10;
 const FALLBACK_VOICES = new Set(["kick", "snare", "hat", "tom", "clap", "bell"]);
 const SLOT_DEFAULTS = [
   { label: "粉色", color: "#ed77c0", hue: 323, hueRange: 16, minSaturation: 0.3, minValue: 0.32, voice: "clap" },
-  { label: "宝蓝", color: "#3b7bd4", hue: 215, hueRange: 16, minSaturation: 0.42, minValue: 0.25, voice: "kick" },
-  { label: "红色", color: "#c0332c", hue: 3, hueRange: 15, minSaturation: 0.42, minValue: 0.22, voice: "snare" },
+  { label: "浅蓝", color: "#6ca6e9", hue: 212, hueRange: 16, minSaturation: 0.32, minValue: 0.45, voice: "kick" },
+  { label: "红色", color: "#c5332d", hue: 2, hueRange: 15, minSaturation: 0.45, minValue: 0.3, voice: "snare" },
   { label: "深青绿", color: "#357575", hue: 180, hueRange: 18, minSaturation: 0.25, minValue: 0.16, voice: "tom" },
-  { label: "深蓝", color: "#2347d1", hue: 228, hueRange: 16, minSaturation: 0.42, minValue: 0.22, voice: "hat" },
-  { label: "深棕", color: "#595653", hue: 30, hueRange: 35, minSaturation: 0.02, maxSaturation: 0.3, minValue: 0.12, maxValue: 0.65, voice: "bell" },
+  { label: "深蓝", color: "#4261c0", hue: 225, hueRange: 16, minSaturation: 0.42, minValue: 0.32, voice: "hat" },
+  { label: "棕红", color: "#aa4b42", hue: 5, hueRange: 15, minSaturation: 0.4, minValue: 0.28, voice: "bell" },
   { label: "紫色", color: "#692cc3", hue: 264, hueRange: 18, minSaturation: 0.42, minValue: 0.2, voice: "clap" },
   { label: "橙色", color: "#ea9f39", hue: 35, hueRange: 16, minSaturation: 0.42, minValue: 0.28, voice: "tom" },
-  { label: "亮黄", color: "#f3f952", hue: 62, hueRange: 15, minSaturation: 0.35, minValue: 0.36, voice: "snare" },
+  { label: "亮黄", color: "#ece847", hue: 59, hueRange: 15, minSaturation: 0.35, minValue: 0.36, voice: "snare" },
   { label: "荧光绿", color: "#b0e548", hue: 80, hueRange: 15, minSaturation: 0.35, minValue: 0.32, voice: "hat" },
 ];
 
@@ -119,6 +119,8 @@ function createDefaultSlot(index, defaults) {
       enabled: true,
       hueCenter: defaults.hue,
       hueRange: defaults.hueRange ?? 20,
+      saturationCenter: defaults.saturationCenter ?? hexToHsv(defaults.color).s,
+      valueCenter: defaults.valueCenter ?? hexToHsv(defaults.color).v,
       minSaturation: defaults.minSaturation ?? 0.35,
       maxSaturation: defaults.maxSaturation ?? 1,
       minValue: defaults.minValue ?? 0.18,
@@ -133,6 +135,8 @@ function normalizeSlot(value, defaults, index) {
   const label = cleanText(source.label, defaults.label, 48);
   const hasSourceRule = isRecord(source.colorRule);
   const sourceRule = hasSourceRule ? source.colorRule : {};
+  const colorHex = normalizeHex(source.colorHex, defaults.colorHex);
+  const sourceHsv = hexToHsv(colorHex);
   const fallbackVoice = FALLBACK_VOICES.has(source.fallbackVoice)
     ? source.fallbackVoice
     : defaults.fallbackVoice;
@@ -144,7 +148,7 @@ function normalizeSlot(value, defaults, index) {
     gain: clampNumber(source.gain, 0, 1, defaults.gain),
     fallbackVoice,
     soundName: cleanText(source.soundName, "", 120),
-    colorHex: normalizeHex(source.colorHex, defaults.colorHex),
+    colorHex,
     colorRule: {
       id: cleanId(sourceRule.id, `${id}-color`),
       instrument: id,
@@ -152,6 +156,18 @@ function normalizeSlot(value, defaults, index) {
       enabled: source.enabled !== false,
       hueCenter: normalizeHue(numberOr(sourceRule.hueCenter, defaults.colorRule.hueCenter)),
       hueRange: clampNumber(sourceRule.hueRange, 0, 180, defaults.colorRule.hueRange),
+      saturationCenter: clampNumber(
+        sourceRule.saturationCenter,
+        0,
+        1,
+        hasSourceRule ? sourceHsv.s : defaults.colorRule.saturationCenter,
+      ),
+      valueCenter: clampNumber(
+        sourceRule.valueCenter,
+        0,
+        1,
+        hasSourceRule ? sourceHsv.v : defaults.colorRule.valueCenter,
+      ),
       minSaturation: clampNumber(sourceRule.minSaturation, 0, 1, defaults.colorRule.minSaturation),
       maxSaturation: clampNumber(
         sourceRule.maxSaturation,
@@ -162,6 +178,19 @@ function normalizeSlot(value, defaults, index) {
       minValue: clampNumber(sourceRule.minValue, 0, 1, defaults.colorRule.minValue),
       maxValue: clampNumber(sourceRule.maxValue, 0, 1, defaults.colorRule.maxValue),
     },
+  };
+}
+
+function hexToHsv(hex) {
+  const red = Number.parseInt(hex.slice(1, 3), 16) / 255;
+  const green = Number.parseInt(hex.slice(3, 5), 16) / 255;
+  const blue = Number.parseInt(hex.slice(5, 7), 16) / 255;
+  const max = Math.max(red, green, blue);
+  const min = Math.min(red, green, blue);
+  const delta = max - min;
+  return {
+    s: max === 0 ? 0 : delta / max,
+    v: max,
   };
 }
 

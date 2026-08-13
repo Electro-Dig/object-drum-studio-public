@@ -213,6 +213,8 @@ export function createColorRuleFromSample(instrument, hsv, options = {}) {
     enabled: true,
     hueCenter: Math.round(normalizeHue(hsv.h)),
     hueRange,
+    saturationCenter: clamp(hsv.s, 0, 1),
+    valueCenter: clamp(hsv.v, 0, 1),
     minSaturation: clamp(hsv.s - saturationSlack, 0.01, 0.95),
     maxSaturation: hsv.s < 0.3 ? clamp(hsv.s + 0.2, 0.12, 0.5) : 1,
     minValue: clamp(hsv.v - valueSlack, 0.08, 0.95),
@@ -457,6 +459,8 @@ function normalizeColorRules(rules) {
       label: rule.label || rule.instrument || "clap",
       hueCenter: normalizeHue(numberOr(rule.hueCenter, 0)),
       hueRange: clamp(numberOr(rule.hueRange, 20), 0, 180),
+      saturationCenter: finiteOrUndefined(rule.saturationCenter),
+      valueCenter: finiteOrUndefined(rule.valueCenter),
       minSaturation: clamp(numberOr(rule.minSaturation, 0.45), 0, 1),
       maxSaturation: clamp(numberOr(rule.maxSaturation, 1), 0, 1),
       minValue: clamp(numberOr(rule.minValue, 0.18), 0, 1),
@@ -475,7 +479,14 @@ export function findBestColorRuleIndex(hsv, rules) {
     if (!matchesColorRule(hsv, rules[i])) continue;
     const distance = hueDistance(hsv.h, rules[i].hueCenter);
     const range = Number(rules[i].hueRange);
-    const score = range > 0 ? distance / range : (distance === 0 ? 0 : Infinity);
+    const hueScore = range > 0 ? distance / range : (distance === 0 ? 0 : Infinity);
+    const saturationScore = Number.isFinite(rules[i].saturationCenter)
+      ? Math.abs(hsv.s - rules[i].saturationCenter) / 0.25
+      : 0;
+    const valueScore = Number.isFinite(rules[i].valueCenter)
+      ? Math.abs(hsv.v - rules[i].valueCenter) / 0.25
+      : 0;
+    const score = Math.hypot(hueScore, saturationScore, valueScore);
     ranked.push({ index: i, distance, score });
   }
   ranked.sort((first, second) => first.score - second.score || first.distance - second.distance);
@@ -520,4 +531,9 @@ function hueDistance(a, b) {
 
 function numberOr(value, fallback) {
   return Number.isFinite(Number(value)) ? Number(value) : fallback;
+}
+
+function finiteOrUndefined(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? clamp(number, 0, 1) : undefined;
 }

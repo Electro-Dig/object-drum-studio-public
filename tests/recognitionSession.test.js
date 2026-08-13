@@ -55,12 +55,12 @@ test("ConsoleRecognitionSession keeps HSV fallback available before empty-scene 
   assert.equal(result.pads[0].instrument, "slot-3");
 });
 
-test("ConsoleRecognitionSession recognizes brown after empty-scene calibration and three votes", () => {
+test("ConsoleRecognitionSession recognizes brown-red after empty-scene calibration and three votes", () => {
   const width = 24;
   const height = 16;
   const empty = rgbaFrame(width, height, [112, 114, 116, 255]);
   const current = new Uint8ClampedArray(empty);
-  fillRect(current, width, 7, 5, 10, 7, [63, 58, 54, 255]);
+  fillRect(current, width, 7, 5, 10, 7, [169, 74, 65, 255]);
   const profile = createDefaultProfile();
   profile.recognition.minArea = 16;
   const session = new ConsoleRecognitionSession(profile);
@@ -75,22 +75,23 @@ test("ConsoleRecognitionSession recognizes brown after empty-scene calibration a
   assert.equal(result.pads[0].instrument, "slot-6");
 });
 
-test("ConsoleRecognitionSession maps all ten photographed colors through calibrated Lab recognition", () => {
+test("ConsoleRecognitionSession separates new light/deep blues and maps both brown-red samples through calibrated Lab", () => {
   const width = 72;
-  const height = 28;
+  const height = 40;
   const empty = rgbaFrame(width, height, [246, 246, 244, 255]);
   const current = new Uint8ClampedArray(empty);
   const colors = [
     [237, 119, 192, 255],
-    [59, 123, 212, 255],
-    [192, 51, 44, 255],
+    [108, 166, 233, 255],
+    [197, 51, 45, 255],
     [53, 117, 117, 255],
-    [35, 71, 209, 255],
-    [89, 86, 83, 255],
+    [66, 97, 192, 255],
+    [173, 77, 67, 255],
     [105, 44, 195, 255],
     [234, 159, 57, 255],
-    [243, 249, 82, 255],
+    [236, 232, 71, 255],
     [176, 229, 72, 255],
+    [166, 73, 65, 255],
   ];
   colors.forEach((color, index) => {
     const column = index % 5;
@@ -107,10 +108,23 @@ test("ConsoleRecognitionSession maps all ten photographed colors through calibra
 
   assert.equal(result.mode, "calibrated-lab");
   assert.equal(result.status, "ok");
-  assert.deepEqual(
-    new Set(result.pads.map((pad) => pad.instrument)),
-    new Set(Array.from({ length: 10 }, (_, index) => `slot-${index + 1}`)),
-  );
+  assert.equal(result.pads.length, 11);
+  const expectedSlots = [
+    "slot-1", "slot-2", "slot-3", "slot-4", "slot-5",
+    "slot-6", "slot-7", "slot-8", "slot-9", "slot-10", "slot-6",
+  ];
+  expectedSlots.forEach((expected, index) => {
+    const column = index % 5;
+    const row = Math.floor(index / 5);
+    const expectedCenter = { x: 7 + column * 13, y: 7 + row * 13 };
+    const pad = result.pads.find((candidate) => (
+      Math.hypot(
+        candidate.centroid.x - expectedCenter.x,
+        candidate.centroid.y - expectedCenter.y,
+      ) < 2
+    ));
+    assert.equal(pad?.instrument, expected, `sample ${index + 1} should map to ${expected}`);
+  });
 });
 
 test("ConsoleRecognitionSession suppresses tracks when lighting invalidates the background", () => {

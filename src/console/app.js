@@ -455,6 +455,8 @@ function applyHexColor(slot, hex) {
   slot.colorHex = hex.toLowerCase();
   slot.colorRule.hueCenter = Math.round(hsv.h);
   slot.colorRule.hueRange = hsv.s < 0.34 ? 34 : 22;
+  slot.colorRule.saturationCenter = hsv.s;
+  slot.colorRule.valueCenter = hsv.v;
   slot.colorRule.minSaturation = Math.max(0.01, hsv.s - 0.18);
   slot.colorRule.maxSaturation = hsv.s < 0.3 ? Math.min(0.5, hsv.s + 0.2) : 1;
   slot.colorRule.minValue = Math.max(0.08, hsv.v - 0.26);

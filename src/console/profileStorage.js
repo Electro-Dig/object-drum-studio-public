@@ -1,6 +1,6 @@
 import { createDefaultProfile, normalizeProfile } from "./profile.js";
 
-export const PROFILE_STORAGE_KEY = "object-drum-show-console-profile-v3";
+export const PROFILE_STORAGE_KEY = "object-drum-show-console-profile-v4";
 
 export function loadStoredProfile(storage) {
   try {

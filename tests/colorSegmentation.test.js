@@ -256,21 +256,22 @@ test("detectColorPadsFromRgba uses majority vote for the dominant rule", () => {
   assert.equal(pads[0].area, 32);
 });
 
-test("detectColorPadsFromRgba maps the photographed ten-color palette to ten distinct default slots", () => {
+test("detectColorPadsFromRgba separates the photographed light/deep blues and red/brown-red samples", () => {
   const width = 64;
-  const height = 28;
+  const height = 40;
   const data = rgbaFrame(width, height, [246, 246, 244, 255]);
   const colors = [
     [237, 119, 192, 255],
-    [59, 123, 212, 255],
-    [192, 51, 44, 255],
+    [108, 166, 233, 255],
+    [197, 51, 45, 255],
     [53, 117, 117, 255],
-    [35, 71, 209, 255],
-    [89, 86, 83, 255],
+    [66, 97, 192, 255],
+    [173, 77, 67, 255],
     [105, 44, 195, 255],
     [234, 159, 57, 255],
-    [243, 249, 82, 255],
+    [236, 232, 71, 255],
     [176, 229, 72, 255],
+    [166, 73, 65, 255],
   ];
   colors.forEach((color, index) => {
     const column = index % 5;
@@ -284,11 +285,23 @@ test("detectColorPadsFromRgba maps the photographed ten-color palette to ten dis
     colorRules: activeColorRules(createDefaultProfile()),
   });
 
-  assert.equal(pads.length, 10);
-  assert.deepEqual(
-    [...new Set(pads.map((pad) => pad.instrument))].sort(),
-    Array.from({ length: 10 }, (_, index) => `slot-${index + 1}`).sort(),
-  );
+  assert.equal(pads.length, 11);
+  const expectedSlots = [
+    "slot-1", "slot-2", "slot-3", "slot-4", "slot-5",
+    "slot-6", "slot-7", "slot-8", "slot-9", "slot-10", "slot-6",
+  ];
+  expectedSlots.forEach((expected, index) => {
+    const column = index % 5;
+    const row = Math.floor(index / 5);
+    const expectedCenter = { x: 5.5 + column * 12, y: 5.5 + row * 13 };
+    const pad = pads.find((candidate) => (
+      Math.hypot(
+        candidate.centroid.x - expectedCenter.x,
+        candidate.centroid.y - expectedCenter.y,
+      ) < 2
+    ));
+    assert.equal(pad?.instrument, expected, `sample ${index + 1} should map to ${expected}`);
+  });
 });
 
 test("overlapping HSV rules choose the nearest rule independent of declaration order", () => {
@@ -311,13 +324,45 @@ test("overlapping HSV rules choose the nearest rule independent of declaration o
   assert.equal(findBestColorRuleIndex(hsv, [nearest, first]), 0);
 });
 
-test("default deep brown and orange rules separate equal-hue colors by saturation", () => {
+test("overlapping same-hue HSV rules use saturation and value centers to separate red from brown-red", () => {
+  const red = {
+    id: "red",
+    instrument: "red",
+    enabled: true,
+    hueCenter: 5,
+    hueRange: 14,
+    saturationCenter: 0.77,
+    valueCenter: 0.77,
+    minSaturation: 0.45,
+    maxSaturation: 1,
+    minValue: 0.35,
+    maxValue: 1,
+  };
+  const brownRed = {
+    ...red,
+    id: "brown-red",
+    instrument: "brown-red",
+    hueCenter: 5,
+    saturationCenter: 0.61,
+    valueCenter: 0.66,
+  };
+  const sample = rgbToHsv(173, 77, 67);
+
+  const forward = findBestColorRuleIndex(sample, [red, brownRed]);
+  const reversed = findBestColorRuleIndex(sample, [brownRed, red]);
+  assert.notEqual(forward, -1);
+  assert.notEqual(reversed, -1);
+  assert.equal([red, brownRed][forward].id, "brown-red");
+  assert.equal([brownRed, red][reversed].id, "brown-red");
+});
+
+test("default brown-red and orange rules keep their photographed samples separate", () => {
   const rules = activeColorRules(createDefaultProfile());
   const orange = rgbToHsv(234, 159, 57);
-  const brown = rgbToHsv(89, 86, 83);
+  const brownRed = rgbToHsv(169, 74, 65);
 
   assert.equal(rules[findBestColorRuleIndex(orange, rules)].instrument, "slot-8");
-  assert.equal(rules[findBestColorRuleIndex(brown, rules)].instrument, "slot-6");
+  assert.equal(rules[findBestColorRuleIndex(brownRed, rules)].instrument, "slot-6");
 });
 
 test("a sampled low-saturation brown rule still matches its source color", () => {

@@ -40,6 +40,8 @@ export class ConsoleRecognitionSession {
       minIoU: 0.035,
       smoothing: 0.3,
       strictRuleMatch: false,
+      maxRuleMismatchDistance: 30,
+      maxContinuationDistance: 30,
     });
     const confirmVotes = Math.max(3, this.profile.recognition.confirmFrames);
     this.colorResolver = new TrackColorResolver({
