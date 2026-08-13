@@ -29,8 +29,10 @@
 
 - 扩展 `tests/consolePublicPage.test.js`，要求空场状态和按钮存在。
 - 在 `console.html`、`console.css`、`src/console/app.js` 接入空场捕捉、诊断状态、十槽文案和 HSV 回退。
+- 使用 v2 localStorage key 并从 v1 key 单向迁移；修复同色随机模式以首个启用槽而非数组下标决定可取色卡片。
 - Camera 重连、画布尺寸变化和手动重拍时正确重置背景/轨迹/EntryGate。
 - 更新中文使用指南。
+- 更新 Service Worker cache 名称。
 
 ## 6. 验证与发布
 
@@ -39,4 +41,3 @@
 - 请求独立代码审查并修复 Critical/Important 问题。
 - 提交并推送 `feature/lab-recognition-v1`。
 - 创建新的 Netlify 测试站点并部署，核验新 URL；禁止使用旧 site ID。
-
