@@ -77,3 +77,24 @@ test("PadTracker keeps recently missed pads briefly to avoid flicker", () => {
   assert.equal(held.id, first.id);
   assert.equal(expired.length, 0);
 });
+
+test("PadTracker can keep one geometry track when the detected color changes", () => {
+  const tracker = new PadTracker({
+    confirmFrames: 1,
+    strictRuleMatch: false,
+    maxMatchDistance: 40,
+  });
+
+  const first = tracker.update([pad("raw-a", 10, 10)], 0);
+  const changed = tracker.update([pad("raw-b", 11, 10, {
+    instrument: "clap",
+    label: "Sky blue",
+    ruleId: "sky-blue",
+  })], 80);
+
+  assert.equal(first.length, 1);
+  assert.equal(changed.length, 1);
+  assert.equal(changed[0].id, first[0].id);
+  assert.equal(changed[0].ruleId, "sky-blue");
+  assert.equal(changed[0].observedAt, 80);
+});

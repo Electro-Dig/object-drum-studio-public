@@ -41,7 +41,7 @@ test("EntryGate reset makes currently visible objects eligible again", () => {
   assert.deepEqual(gate.update([pad]), [pad]);
 });
 
-test("selectSoundSlot maps a six-color pad to the matching enabled slot", () => {
+test("selectSoundSlot maps a ten-color pad to the matching enabled slot", () => {
   const profile = createDefaultProfile();
   const target = profile.slots[3];
 
@@ -76,5 +76,5 @@ test("selectSoundSlot uses injected randomness across enabled slots in same-colo
   });
 
   assert.equal(selectSoundSlot({ profile, pad: {}, random: () => 0 }).id, "slot-1");
-  assert.equal(selectSoundSlot({ profile, pad: {}, random: () => 0.999 }).id, "slot-6");
+  assert.equal(selectSoundSlot({ profile, pad: {}, random: () => 0.999 }).id, "slot-10");
 });

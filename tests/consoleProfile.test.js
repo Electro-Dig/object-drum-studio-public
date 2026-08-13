@@ -10,13 +10,25 @@ import {
   validateShowPackage,
 } from "../src/console/profile.js";
 
-test("createDefaultProfile exposes six immediately playable color and sound slots", () => {
+test("createDefaultProfile exposes ten immediately playable photo-matched color and sound slots", () => {
   const profile = createDefaultProfile();
 
   assert.equal(profile.schemaVersion, CONSOLE_SCHEMA_VERSION);
-  assert.equal(profile.mappingMode, MAPPING_MODES.SIX_COLOR);
-  assert.equal(profile.slots.length, 6);
-  assert.equal(new Set(profile.slots.map((slot) => slot.id)).size, 6);
+  assert.equal(profile.mappingMode, MAPPING_MODES.TEN_COLOR);
+  assert.equal(profile.slots.length, 10);
+  assert.equal(new Set(profile.slots.map((slot) => slot.id)).size, 10);
+  assert.deepEqual(profile.slots.map((slot) => slot.colorHex), [
+    "#ff89df",
+    "#295ada",
+    "#e83433",
+    "#075e5f",
+    "#2394e4",
+    "#3f3a36",
+    "#5b2ba4",
+    "#f49e13",
+    "#ebde1d",
+    "#94db16",
+  ]);
   assert.ok(profile.slots.every((slot) => slot.enabled));
   assert.ok(profile.slots.every((slot) => slot.colorRule.instrument === slot.id));
   assert.ok(profile.slots.every((slot) => slot.fallbackVoice));
@@ -50,7 +62,7 @@ test("normalizeProfile fills missing slots and clamps operational values", () =>
   assert.equal(profile.recognition.minArea, 12);
   assert.equal(profile.recognition.confirmFrames, 6);
   assert.equal(profile.recognition.missingTtlMs, 120);
-  assert.equal(profile.slots.length, 6);
+  assert.equal(profile.slots.length, 10);
   assert.equal(profile.slots[0].id, "custom-red");
   assert.equal(profile.slots[0].label, "红色纸片");
   assert.equal(profile.slots[0].gain, 0);
@@ -61,16 +73,36 @@ test("normalizeProfile fills missing slots and clamps operational values", () =>
   assert.equal(profile.slots[0].colorRule.minValue, 1);
 });
 
-test("activeColorRules returns six mappings by default and one recognition color in random mode", () => {
-  const sixColor = createDefaultProfile();
+test("activeColorRules returns ten mappings by default and one recognition color in random mode", () => {
+  const tenColor = createDefaultProfile();
   const random = normalizeProfile({
-    ...sixColor,
+    ...tenColor,
     mappingMode: MAPPING_MODES.SAME_COLOR_RANDOM,
   });
 
-  assert.equal(activeColorRules(sixColor).length, 6);
+  assert.equal(activeColorRules(tenColor).length, 10);
   assert.equal(activeColorRules(random).length, 1);
   assert.equal(activeColorRules(random)[0].id, random.slots[0].colorRule.id);
+});
+
+test("normalizeProfile migrates a legacy six-color profile without losing its original slots", () => {
+  const legacySlots = Array.from({ length: 6 }, (_, index) => ({
+    id: `legacy-${index + 1}`,
+    label: `旧槽 ${index + 1}`,
+    colorHex: `#${String(index + 1).repeat(6)}`,
+  }));
+
+  const profile = normalizeProfile({
+    schemaVersion: 1,
+    mappingMode: "six-color",
+    slots: legacySlots,
+  });
+
+  assert.equal(profile.schemaVersion, 2);
+  assert.equal(profile.mappingMode, MAPPING_MODES.TEN_COLOR);
+  assert.equal(profile.slots.length, 10);
+  assert.deepEqual(profile.slots.slice(0, 6).map((slot) => slot.id), legacySlots.map((slot) => slot.id));
+  assert.deepEqual(profile.slots.slice(6).map((slot) => slot.id), ["slot-7", "slot-8", "slot-9", "slot-10"]);
 });
 
 test("validateShowPackage normalizes a supported package and rejects unsupported schemas", () => {
@@ -81,10 +113,22 @@ test("validateShowPackage normalizes a supported package and rejects unsupported
   });
 
   assert.equal(valid.profile.name, "Client package");
-  assert.equal(valid.profile.slots.length, 6);
+  assert.equal(valid.profile.slots.length, 10);
   assert.equal(valid.samples["slot-1"].name, "hit.wav");
   assert.throws(
     () => validateShowPackage({ schemaVersion: 99, profile: {} }),
     /不支持的配置包版本/,
   );
+});
+
+test("validateShowPackage accepts and upgrades a legacy v1 package", () => {
+  const migrated = validateShowPackage({
+    schemaVersion: 1,
+    profile: { schemaVersion: 1, mappingMode: "six-color", slots: [{ id: "legacy-red" }] },
+    samples: { "legacy-red": { name: "old.wav", dataUrl: "data:audio/wav;base64,AA==" } },
+  });
+
+  assert.equal(migrated.schemaVersion, 2);
+  assert.equal(migrated.profile.slots.length, 10);
+  assert.equal(migrated.samples["legacy-red"].name, "old.wav");
 });

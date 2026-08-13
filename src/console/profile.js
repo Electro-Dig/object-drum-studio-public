@@ -1,19 +1,25 @@
-export const CONSOLE_SCHEMA_VERSION = 1;
+export const CONSOLE_SCHEMA_VERSION = 2;
 
 export const MAPPING_MODES = Object.freeze({
+  TEN_COLOR: "ten-color",
   SIX_COLOR: "six-color",
   SAME_COLOR_RANDOM: "same-color-random",
 });
 
-const SLOT_COUNT = 6;
+const SUPPORTED_SCHEMA_VERSIONS = new Set([1, CONSOLE_SCHEMA_VERSION]);
+const SLOT_COUNT = 10;
 const FALLBACK_VOICES = new Set(["kick", "snare", "hat", "tom", "clap", "bell"]);
 const SLOT_DEFAULTS = [
-  { label: "红色", color: "#ef5b46", hue: 6, voice: "kick" },
-  { label: "黄色", color: "#f4bc43", hue: 44, voice: "snare" },
-  { label: "绿色", color: "#58bd68", hue: 126, voice: "hat" },
-  { label: "青色", color: "#3dc6c4", hue: 182, voice: "tom" },
-  { label: "蓝色", color: "#4f7de8", hue: 224, voice: "clap" },
-  { label: "紫色", color: "#a968d4", hue: 284, voice: "bell" },
+  { label: "粉色", color: "#ff89df", hue: 316, voice: "clap" },
+  { label: "宝蓝", color: "#295ada", hue: 223, voice: "kick" },
+  { label: "红色", color: "#e83433", hue: 0, voice: "snare" },
+  { label: "深青绿", color: "#075e5f", hue: 181, voice: "tom" },
+  { label: "天蓝", color: "#2394e4", hue: 204, voice: "hat" },
+  { label: "深棕", color: "#3f3a36", hue: 27, hueRange: 28, minSaturation: 0.06, voice: "bell" },
+  { label: "紫色", color: "#5b2ba4", hue: 264, voice: "clap" },
+  { label: "橙色", color: "#f49e13", hue: 37, voice: "tom" },
+  { label: "亮黄", color: "#ebde1d", hue: 56, voice: "snare" },
+  { label: "荧光绿", color: "#94db16", hue: 85, voice: "hat" },
 ];
 
 export function createDefaultProfile() {
@@ -21,7 +27,7 @@ export function createDefaultProfile() {
     schemaVersion: CONSOLE_SCHEMA_VERSION,
     id: "default-show",
     name: "现场演出配置",
-    mappingMode: MAPPING_MODES.SIX_COLOR,
+    mappingMode: MAPPING_MODES.TEN_COLOR,
     masterGain: 0.82,
     recognition: {
       minArea: 72,
@@ -47,9 +53,7 @@ export function normalizeProfile(value = {}) {
     schemaVersion: CONSOLE_SCHEMA_VERSION,
     id: cleanText(source.id, defaults.id, 64),
     name: cleanText(source.name, defaults.name, 80),
-    mappingMode: Object.values(MAPPING_MODES).includes(source.mappingMode)
-      ? source.mappingMode
-      : defaults.mappingMode,
+    mappingMode: normalizeMappingMode(source.mappingMode),
     masterGain: clampNumber(source.masterGain, 0, 1, defaults.masterGain),
     recognition: {
       minArea: Math.round(clampNumber(source.recognition?.minArea, 12, 4000, defaults.recognition.minArea)),
@@ -76,7 +80,7 @@ export function validateShowPackage(value) {
   if (!isRecord(value)) {
     throw new Error("配置包格式无效");
   }
-  if (value.schemaVersion !== CONSOLE_SCHEMA_VERSION) {
+  if (!SUPPORTED_SCHEMA_VERSIONS.has(value.schemaVersion)) {
     throw new Error(`不支持的配置包版本：${String(value.schemaVersion ?? "未知")}`);
   }
 
@@ -114,8 +118,8 @@ function createDefaultSlot(index, defaults) {
       label: defaults.label,
       enabled: true,
       hueCenter: defaults.hue,
-      hueRange: 20,
-      minSaturation: 0.35,
+      hueRange: defaults.hueRange ?? 20,
+      minSaturation: defaults.minSaturation ?? 0.35,
       minValue: 0.18,
       maxValue: 1,
     },
@@ -170,6 +174,14 @@ function normalizeHex(value, fallback) {
 
 function normalizeHue(value) {
   return ((Math.round(value) % 360) + 360) % 360;
+}
+
+function normalizeMappingMode(value) {
+  if (value === MAPPING_MODES.SAME_COLOR_RANDOM) return MAPPING_MODES.SAME_COLOR_RANDOM;
+  if (value === MAPPING_MODES.TEN_COLOR || value === MAPPING_MODES.SIX_COLOR) {
+    return MAPPING_MODES.TEN_COLOR;
+  }
+  return MAPPING_MODES.TEN_COLOR;
 }
 
 function clampNumber(value, min, max, fallback) {

@@ -23,7 +23,7 @@ test("buildShowPackage creates a portable versioned package with valid audio rec
     },
   });
 
-  assert.equal(packageValue.schemaVersion, 1);
+  assert.equal(packageValue.schemaVersion, 2);
   assert.equal(packageValue.profile.name, "华西现场");
   assert.equal(packageValue.samples["slot-1"].name, "impact.wav");
   assert.equal(packageValue.samples.unknown, undefined);
@@ -40,7 +40,7 @@ test("readShowPackage parses and normalizes a JSON package", () => {
 
   const result = readShowPackage(text);
 
-  assert.equal(result.profile.slots.length, 6);
+  assert.equal(result.profile.slots.length, 10);
   assert.equal(result.samples["slot-2"].type, "audio/mpeg");
 });
 

@@ -4,6 +4,8 @@ const DEFAULT_OPTIONS = {
   missingTtlMs: 420,
   maxMatchDistance: 58,
   minIoU: 0.04,
+  strictRuleMatch: true,
+  colorMismatchPenalty: 12,
 };
 
 export class PadTracker {
@@ -56,6 +58,7 @@ export class PadTracker {
 function createTrack(candidate, nextTrackId, timeMs) {
   const id = `tracked-${nextTrackId}`;
   const pad = normalizeTrackedPad(candidate, id);
+  pad.observedAt = timeMs;
   return {
     id,
     hits: 1,
@@ -82,6 +85,8 @@ function updateTrack(track, candidate, timeMs, options) {
     bounds: smoothBounds(previous.bounds, next.bounds, alpha),
     centroid: smoothPoint(previous.centroid, next.centroid, alpha),
     color: smoothColor(previous.color, next.color, alpha),
+    classification: next.classification,
+    observedAt: timeMs,
   };
   track.pad.outline = boundsToOutline(track.pad.bounds);
 }
@@ -114,6 +119,7 @@ function findBestTrack(candidate, tracks, options) {
 
 function matchScore(candidate, trackedPad, options) {
   if (
+    options.strictRuleMatch &&
     candidate.ruleId &&
     trackedPad.ruleId &&
     candidate.ruleId !== trackedPad.ruleId
@@ -126,7 +132,9 @@ function matchScore(candidate, trackedPad, options) {
   const canMatch = distance <= options.maxMatchDistance || iou >= options.minIoU;
   if (!canMatch) return Infinity;
 
-  const instrumentPenalty = candidate.instrument === trackedPad.instrument ? 0 : 40;
+  const instrumentPenalty = candidate.instrument === trackedPad.instrument
+    ? 0
+    : options.strictRuleMatch ? 40 : options.colorMismatchPenalty;
   const ruleBonus = candidate.ruleId && candidate.ruleId === trackedPad.ruleId ? -18 : 0;
   return distance + instrumentPenalty + ruleBonus - iou * 30;
 }
@@ -197,6 +205,7 @@ function clonePad(pad) {
     bounds: { ...pad.bounds },
     centroid: { ...pad.centroid },
     color: { ...pad.color },
+    classification: pad.classification ? { ...pad.classification } : pad.classification,
     outline: pad.outline.map((point) => ({ ...point })),
   };
 }
