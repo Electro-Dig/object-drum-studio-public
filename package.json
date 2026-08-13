@@ -1,6 +1,6 @@
 {
   "name": "object-drum-studio-public",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "private": false,
   "type": "module",
   "scripts": {

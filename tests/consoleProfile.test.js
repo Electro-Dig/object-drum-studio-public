@@ -15,6 +15,7 @@ test("createDefaultProfile exposes ten immediately playable photo-matched color 
 
   assert.equal(profile.schemaVersion, CONSOLE_SCHEMA_VERSION);
   assert.equal(profile.mappingMode, MAPPING_MODES.TEN_COLOR);
+  assert.equal(profile.recognition.settleDelayMs, 100);
   assert.equal(profile.slots.length, 10);
   assert.equal(new Set(profile.slots.map((slot) => slot.id)).size, 10);
   assert.deepEqual(profile.slots.map((slot) => slot.label), [
@@ -56,6 +57,7 @@ test("normalizeProfile fills missing slots and clamps operational values", () =>
       minArea: -20,
       confirmFrames: 99,
       missingTtlMs: 10,
+      settleDelayMs: 9999,
     },
     slots: [{
       id: "custom-red",
@@ -76,6 +78,7 @@ test("normalizeProfile fills missing slots and clamps operational values", () =>
   assert.equal(profile.recognition.minArea, 12);
   assert.equal(profile.recognition.confirmFrames, 6);
   assert.equal(profile.recognition.missingTtlMs, 120);
+  assert.equal(profile.recognition.settleDelayMs, 800);
   assert.equal(profile.slots.length, 10);
   assert.equal(profile.slots[0].id, "custom-red");
   assert.equal(profile.slots[0].label, "红色纸片");

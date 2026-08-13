@@ -60,6 +60,8 @@ const els = {
   profileName: document.querySelector("#profileNameInput"),
   minArea: document.querySelector("#minAreaInput"),
   minAreaValue: document.querySelector("#minAreaValue"),
+  settleDelay: document.querySelector("#settleDelayInput"),
+  settleDelayValue: document.querySelector("#settleDelayValue"),
   masterGain: document.querySelector("#masterGainInput"),
   masterGainValue: document.querySelector("#masterGainValue"),
   mirror: document.querySelector("#mirrorInput"),
@@ -73,6 +75,8 @@ const els = {
   runtimeReset: document.querySelector("#runtimeResetButton"),
   showMasterGain: document.querySelector("#showMasterGainInput"),
   showMasterGainValue: document.querySelector("#showMasterGainValue"),
+  showSettleDelay: document.querySelector("#showSettleDelayInput"),
+  showSettleDelayValue: document.querySelector("#showSettleDelayValue"),
   exitShowMode: document.querySelector("#exitShowModeButton"),
   toast: document.querySelector("#toast"),
 };
@@ -130,6 +134,8 @@ function wireEvents() {
     state.profile.recognition.minArea = Number(els.minArea.value);
     commitProfile({ resetTracking: true, renderSlots: false });
   });
+  els.settleDelay.addEventListener("input", () => updateSettleDelay(els.settleDelay.value));
+  els.showSettleDelay.addEventListener("input", () => updateSettleDelay(els.showSettleDelay.value));
   els.masterGain.addEventListener("input", () => updateMasterGain(els.masterGain.value));
   els.showMasterGain.addEventListener("input", () => updateMasterGain(els.showMasterGain.value));
   els.mirror.addEventListener("change", () => {
@@ -265,7 +271,14 @@ function processDetectionFrame(now) {
       showToast("空场标定已失效，声音已暂停。请重新捕捉空场。", "error");
     }
   }
-  const entries = entryGate.update(state.pads);
+  const entries = entryGate.update(state.pads, {
+    timeMs: now,
+    stableMode: state.mode === "show",
+    settleDelayMs: state.profile.recognition.settleDelayMs,
+    frameWidth: els.processCanvas.width,
+    frameHeight: els.processCanvas.height,
+  });
+  if (state.mode === "show") state.pads = entryGate.lockIdentities(state.pads);
   els.objectCount.textContent = String(state.pads.length);
   if (canTriggerCalibratedRecognition({ live: state.live, result })) triggerEntries(entries);
 }
@@ -583,6 +596,8 @@ function enterShowMode() {
     showToast(message, "error");
     return;
   }
+  entryGate.reset();
+  entryGate.update(state.pads);
   state.mode = "show";
   state.live = false;
   els.body.classList.remove("is-config-mode");
@@ -645,6 +660,11 @@ function updateMasterGain(value) {
   syncPrimaryControls();
 }
 
+function updateSettleDelay(value) {
+  state.profile.recognition.settleDelayMs = Number(value);
+  commitProfile({ renderSlots: false });
+}
+
 function rebuildRecognitionSession({ clearBackground = false } = {}) {
   if (!state.recognitionSession) {
     state.recognitionSession = new ConsoleRecognitionSession(state.profile);
@@ -678,10 +698,14 @@ function syncPrimaryControls() {
   els.profileName.value = profile.name;
   els.minArea.value = String(profile.recognition.minArea);
   els.minAreaValue.textContent = String(profile.recognition.minArea);
+  els.settleDelay.value = String(profile.recognition.settleDelayMs);
+  els.settleDelayValue.textContent = `${profile.recognition.settleDelayMs}ms`;
   els.masterGain.value = String(profile.masterGain);
   els.masterGainValue.textContent = formatPercent(profile.masterGain);
   els.showMasterGain.value = String(profile.masterGain);
   els.showMasterGainValue.textContent = formatPercent(profile.masterGain);
+  els.showSettleDelay.value = String(profile.recognition.settleDelayMs);
+  els.showSettleDelayValue.textContent = `${profile.recognition.settleDelayMs}ms`;
   els.mirror.checked = profile.camera.mirror;
   els.showProfileName.textContent = profile.name;
   els.mappingModeHelp.textContent = profile.mappingMode === MAPPING_MODES.SAME_COLOR_RANDOM

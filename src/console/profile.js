@@ -33,6 +33,7 @@ export function createDefaultProfile() {
       minArea: 72,
       confirmFrames: 2,
       missingTtlMs: 460,
+      settleDelayMs: 100,
     },
     camera: {
       mirror: true,
@@ -59,6 +60,7 @@ export function normalizeProfile(value = {}) {
       minArea: Math.round(clampNumber(source.recognition?.minArea, 12, 4000, defaults.recognition.minArea)),
       confirmFrames: Math.round(clampNumber(source.recognition?.confirmFrames, 1, 6, defaults.recognition.confirmFrames)),
       missingTtlMs: Math.round(clampNumber(source.recognition?.missingTtlMs, 120, 3000, defaults.recognition.missingTtlMs)),
+      settleDelayMs: Math.round(clampNumber(source.recognition?.settleDelayMs, 0, 800, defaults.recognition.settleDelayMs)),
     },
     camera: {
       mirror: source.camera?.mirror !== false,

@@ -1,4 +1,4 @@
-const CACHE_NAME = "client-show-console-v5-light-blue-brown-red";
+const CACHE_NAME = "client-show-console-v6-stable-entry-gate";
 const SHELL_ASSETS = [
   "/console.html",
   "/console.css",

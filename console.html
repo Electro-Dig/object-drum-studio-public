@@ -151,6 +151,13 @@
                 <input id="masterGainInput" type="range" min="0" max="1" step="0.01" />
                 <output id="masterGainValue">82%</output>
               </label>
+              <label class="field">
+                <span>放稳延迟</span>
+                <input id="settleDelayInput" type="range" min="0" max="800" step="50" />
+                <output id="settleDelayValue">100ms</output>
+              </label>
+            </div>
+            <div class="inline-fields inline-fields--compact">
               <label class="toggle-field">
                 <input id="mirrorInput" type="checkbox" />
                 <span>镜像预览</span>
@@ -195,6 +202,11 @@
           <span><small>MASTER</small><b>总音量</b></span>
           <input id="showMasterGainInput" type="range" min="0" max="1" step="0.01" />
           <output id="showMasterGainValue">82%</output>
+        </label>
+        <label class="show-volume show-delay">
+          <span><small>SETTLE</small><b>放稳延迟</b></span>
+          <input id="showSettleDelayInput" type="range" min="0" max="800" step="50" />
+          <output id="showSettleDelayValue">100ms</output>
         </label>
         <button id="exitShowModeButton" class="show-action show-action--exit" type="button">
           <span class="show-action__icon" aria-hidden="true">⌁</span>
