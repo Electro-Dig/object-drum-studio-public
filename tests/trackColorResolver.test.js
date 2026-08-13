@@ -65,3 +65,43 @@ test("TrackColorResolver clears voting state after the track leaves", () => {
 
   assert.deepEqual(returned, []);
 });
+
+test("TrackColorResolver unlocks after three consecutive high-confidence observations of another color", () => {
+  const resolver = new TrackColorResolver({
+    confirmVotes: 3,
+    switchVotes: 3,
+    switchConfidence: 0.7,
+  });
+
+  resolver.update([trackedPad("blue", 0)]);
+  resolver.update([trackedPad("blue", 80)]);
+  resolver.update([trackedPad("blue", 160)]);
+  assert.equal(resolver.update([trackedPad("sky", 240)])[0].ruleId, "blue");
+  assert.equal(resolver.update([trackedPad("sky", 320)])[0].ruleId, "blue");
+  const switched = resolver.update([trackedPad("sky", 400)]);
+
+  assert.deepEqual(switched, []);
+  assert.equal(resolver.update([trackedPad("sky", 480)]).length, 0);
+  const reconfirmed = resolver.update([trackedPad("sky", 560)]);
+  assert.equal(reconfirmed.length, 1);
+  assert.equal(reconfirmed[0].ruleId, "sky");
+  assert.equal(reconfirmed[0].instrument, "slot-5");
+});
+
+test("TrackColorResolver does not count tracker-held copies as fresh switch evidence", () => {
+  const resolver = new TrackColorResolver({
+    confirmVotes: 3,
+    switchVotes: 3,
+    switchConfidence: 0.7,
+  });
+
+  resolver.update([trackedPad("blue", 0)]);
+  resolver.update([trackedPad("blue", 80)]);
+  resolver.update([trackedPad("blue", 160)]);
+  resolver.update([trackedPad("sky", 240)]);
+  resolver.update([trackedPad("sky", 240)]);
+  const heldAgain = resolver.update([trackedPad("sky", 240)]);
+
+  assert.equal(heldAgain.length, 1);
+  assert.equal(heldAgain[0].ruleId, "blue");
+});

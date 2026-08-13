@@ -137,6 +137,29 @@ test("detectCalibratedObjects samples the painted center instead of a dark bark 
   assert.equal(result.pads[0].ruleId, "slot-8-color");
 });
 
+test("detectCalibratedObjects splits touching objects by their Lab prototypes", () => {
+  const width = 32;
+  const height = 18;
+  const background = rgbaFrame(width, height, [118, 120, 122, 255]);
+  const current = new Uint8ClampedArray(background);
+  fillRect(current, width, 6, 4, 10, 10, rgb("#e83433"));
+  fillRect(current, width, 16, 4, 10, 10, rgb("#295ada"));
+
+  const result = detectCalibratedObjects(current, width, height, {
+    backgroundModel: createBackgroundModel(background, width, height),
+    prototypes: PROTOTYPES,
+    minArea: 30,
+    maxColorDistance: 32,
+    minColorMargin: 2,
+  });
+
+  assert.equal(result.pads.length, 2);
+  assert.deepEqual(
+    new Set(result.pads.map((pad) => pad.ruleId)),
+    new Set(["slot-2-color", "slot-3-color"]),
+  );
+});
+
 test("detectCalibratedObjects reports background mismatch instead of returning a full-frame object", () => {
   const width = 20;
   const height = 12;

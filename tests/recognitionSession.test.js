@@ -88,3 +88,24 @@ test("ConsoleRecognitionSession suppresses tracks when lighting invalidates the 
   assert.equal(result.status, "background-mismatch");
   assert.deepEqual(result.pads, []);
 });
+
+test("ConsoleRecognitionSession can confirm when the profile requests six frames", () => {
+  const width = 24;
+  const height = 16;
+  const empty = rgbaFrame(width, height, [112, 114, 116, 255]);
+  const current = new Uint8ClampedArray(empty);
+  fillRect(current, width, 7, 5, 10, 7, [232, 52, 51, 255]);
+  const profile = createDefaultProfile();
+  profile.recognition.minArea = 16;
+  profile.recognition.confirmFrames = 6;
+  const session = new ConsoleRecognitionSession(profile);
+  session.captureBackground(empty, width, height);
+
+  let result;
+  for (let frame = 0; frame < 6; frame += 1) {
+    result = session.process(current, width, height, frame * 80);
+  }
+
+  assert.equal(result.pads.length, 1);
+  assert.equal(result.pads[0].instrument, "slot-3");
+});

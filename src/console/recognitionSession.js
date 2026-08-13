@@ -41,9 +41,10 @@ export class ConsoleRecognitionSession {
       smoothing: 0.3,
       strictRuleMatch: false,
     });
+    const confirmVotes = Math.max(3, this.profile.recognition.confirmFrames);
     this.colorResolver = new TrackColorResolver({
-      windowSize: 5,
-      confirmVotes: Math.max(3, this.profile.recognition.confirmFrames),
+      windowSize: Math.max(5, confirmVotes),
+      confirmVotes,
       minConfidence: 0.08,
     });
   }
