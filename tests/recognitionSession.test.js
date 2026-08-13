@@ -75,6 +75,44 @@ test("ConsoleRecognitionSession recognizes brown after empty-scene calibration a
   assert.equal(result.pads[0].instrument, "slot-6");
 });
 
+test("ConsoleRecognitionSession maps all ten photographed colors through calibrated Lab recognition", () => {
+  const width = 72;
+  const height = 28;
+  const empty = rgbaFrame(width, height, [246, 246, 244, 255]);
+  const current = new Uint8ClampedArray(empty);
+  const colors = [
+    [237, 119, 192, 255],
+    [59, 123, 212, 255],
+    [192, 51, 44, 255],
+    [53, 117, 117, 255],
+    [35, 71, 209, 255],
+    [89, 86, 83, 255],
+    [105, 44, 195, 255],
+    [234, 159, 57, 255],
+    [243, 249, 82, 255],
+    [176, 229, 72, 255],
+  ];
+  colors.forEach((color, index) => {
+    const column = index % 5;
+    const row = Math.floor(index / 5);
+    fillRect(current, width, 4 + column * 13, 4 + row * 13, 7, 7, color);
+  });
+  const profile = createDefaultProfile();
+  profile.recognition.minArea = 16;
+  const session = new ConsoleRecognitionSession(profile);
+  session.captureBackground(empty, width, height);
+
+  let result;
+  for (const now of [0, 80, 160]) result = session.process(current, width, height, now);
+
+  assert.equal(result.mode, "calibrated-lab");
+  assert.equal(result.status, "ok");
+  assert.deepEqual(
+    new Set(result.pads.map((pad) => pad.instrument)),
+    new Set(Array.from({ length: 10 }, (_, index) => `slot-${index + 1}`)),
+  );
+});
+
 test("ConsoleRecognitionSession suppresses tracks when lighting invalidates the background", () => {
   const width = 20;
   const height = 12;

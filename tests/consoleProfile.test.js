@@ -17,17 +17,29 @@ test("createDefaultProfile exposes ten immediately playable photo-matched color 
   assert.equal(profile.mappingMode, MAPPING_MODES.TEN_COLOR);
   assert.equal(profile.slots.length, 10);
   assert.equal(new Set(profile.slots.map((slot) => slot.id)).size, 10);
+  assert.deepEqual(profile.slots.map((slot) => slot.label), [
+    "粉色",
+    "宝蓝",
+    "红色",
+    "深青绿",
+    "深蓝",
+    "深棕",
+    "紫色",
+    "橙色",
+    "亮黄",
+    "荧光绿",
+  ]);
   assert.deepEqual(profile.slots.map((slot) => slot.colorHex), [
-    "#ff89df",
-    "#295ada",
-    "#e83433",
-    "#075e5f",
-    "#2394e4",
-    "#3f3a36",
-    "#5b2ba4",
-    "#f49e13",
-    "#ebde1d",
-    "#94db16",
+    "#ed77c0",
+    "#3b7bd4",
+    "#c0332c",
+    "#357575",
+    "#2347d1",
+    "#595653",
+    "#692cc3",
+    "#ea9f39",
+    "#f3f952",
+    "#b0e548",
   ]);
   assert.ok(profile.slots.every((slot) => slot.enabled));
   assert.ok(profile.slots.every((slot) => slot.colorRule.instrument === slot.id));
@@ -103,6 +115,26 @@ test("normalizeProfile migrates a legacy six-color profile without losing its or
   assert.equal(profile.slots.length, 10);
   assert.deepEqual(profile.slots.slice(0, 6).map((slot) => slot.id), legacySlots.map((slot) => slot.id));
   assert.deepEqual(profile.slots.slice(6).map((slot) => slot.id), ["slot-7", "slot-8", "slot-9", "slot-10"]);
+});
+
+test("legacy color rules without a saturation ceiling remain unrestricted after migration", () => {
+  const profile = normalizeProfile({
+    schemaVersion: 1,
+    mappingMode: "six-color",
+    slots: Array.from({ length: 6 }, (_, index) => ({
+      id: `legacy-${index + 1}`,
+      colorRule: {
+        id: `legacy-${index + 1}-color`,
+        hueCenter: index === 5 ? 264 : index * 40,
+        hueRange: 20,
+        minSaturation: 0.35,
+        minValue: 0.18,
+        maxValue: 1,
+      },
+    })),
+  });
+
+  assert.equal(profile.slots[5].colorRule.maxSaturation, 1);
 });
 
 test("validateShowPackage normalizes a supported package and rejects unsupported schemas", () => {

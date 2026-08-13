@@ -7,7 +7,6 @@ import { EntryGate } from "./entryGate.js";
 import {
   MAPPING_MODES,
   activeColorRules,
-  createDefaultProfile,
   normalizeProfile,
 } from "./profile.js";
 import {
@@ -17,9 +16,15 @@ import {
 } from "./sampleStore.js";
 import { selectSoundSlot } from "./soundSelector.js";
 import { ConsoleRecognitionSession } from "./recognitionSession.js";
+import {
+  loadStoredProfile,
+  saveStoredProfile,
+} from "./profileStorage.js";
+import {
+  canTriggerCalibratedRecognition,
+  evaluateShowModeReadiness,
+} from "./showModeGuard.js";
 
-const PROFILE_STORAGE_KEY = "object-drum-show-console-profile-v2";
-const LEGACY_PROFILE_STORAGE_KEY = "object-drum-show-console-profile-v1";
 const PROCESS_WIDTH = 360;
 const DETECTION_INTERVAL_MS = 78;
 const MAX_EVENT_LOG = 7;
@@ -79,7 +84,7 @@ const sampleStore = new SampleStore();
 const entryGate = new EntryGate();
 
 const state = {
-  profile: loadSavedProfile(),
+  profile: loadStoredProfile(localStorage),
   recognitionSession: null,
   recognitionStatus: "needs-calibration",
   stream: null,
@@ -250,9 +255,19 @@ function processDetectionFrame(now) {
     showToast("背景变化过大：请清空画面后重新捕捉空场。", "error");
   }
   if (previousStatus !== result.status) syncSystemChecks();
+  if (state.live && !canTriggerCalibratedRecognition({ live: true, result })) {
+    state.live = false;
+    void releaseWakeLock();
+    entryGate.reset();
+    syncLiveButton();
+    if (result.status !== "background-mismatch") {
+      setRuntimeState("fault", "识别已暂停", "请清空画面并重新捕捉空场");
+      showToast("空场标定已失效，声音已暂停。请重新捕捉空场。", "error");
+    }
+  }
   const entries = entryGate.update(state.pads);
   els.objectCount.textContent = String(state.pads.length);
-  if (state.live) triggerEntries(entries);
+  if (canTriggerCalibratedRecognition({ live: state.live, result })) triggerEntries(entries);
 }
 
 function captureBackground() {
@@ -440,7 +455,8 @@ function applyHexColor(slot, hex) {
   slot.colorHex = hex.toLowerCase();
   slot.colorRule.hueCenter = Math.round(hsv.h);
   slot.colorRule.hueRange = hsv.s < 0.34 ? 34 : 22;
-  slot.colorRule.minSaturation = Math.max(0.12, hsv.s - 0.18);
+  slot.colorRule.minSaturation = Math.max(0.01, hsv.s - 0.18);
+  slot.colorRule.maxSaturation = hsv.s < 0.3 ? Math.min(0.5, hsv.s + 0.2) : 1;
   slot.colorRule.minValue = Math.max(0.08, hsv.v - 0.26);
 }
 
@@ -554,8 +570,16 @@ function enterShowMode() {
     showToast("至少需要启用一个颜色与声音槽位。", "error");
     return;
   }
-  if (!state.recognitionSession.calibrated) {
-    showToast("尚未捕捉空场：将暂时使用 HSV 兼容识别。", "error");
+  const readiness = evaluateShowModeReadiness({
+    calibrated: state.recognitionSession.calibrated,
+    recognitionStatus: state.recognitionStatus,
+  });
+  if (!readiness.allowed) {
+    const message = readiness.reason === "recapture-background"
+      ? "当前空场标定已经失效，请清空画面并重新捕捉空场。"
+      : "请先连接摄像头，清空画面并点击“捕捉空场”。";
+    showToast(message, "error");
+    return;
   }
   state.mode = "show";
   state.live = false;
@@ -586,6 +610,14 @@ async function toggleLive() {
   }
 
   if (!state.cameraReady && !(await startCamera())) return;
+  const readiness = evaluateShowModeReadiness({
+    calibrated: state.recognitionSession.calibrated,
+    recognitionStatus: state.recognitionStatus,
+  });
+  if (!readiness.allowed) {
+    showToast("请先清空画面并捕捉空场，再开始运行。", "error");
+    return;
+  }
   if (!audio.ready && !(await armAudio())) return;
   entryGate.reset();
   entryGate.update(state.pads);
@@ -743,21 +775,7 @@ function syncLiveButton() {
 }
 
 function saveProfile() {
-  localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(normalizeProfile(state.profile)));
-}
-
-function loadSavedProfile() {
-  try {
-    const currentValue = localStorage.getItem(PROFILE_STORAGE_KEY);
-    if (currentValue) return normalizeProfile(JSON.parse(currentValue));
-    const legacyValue = localStorage.getItem(LEGACY_PROFILE_STORAGE_KEY);
-    if (!legacyValue) return createDefaultProfile();
-    const migrated = normalizeProfile(JSON.parse(legacyValue));
-    localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(migrated));
-    return migrated;
-  } catch {
-    return createDefaultProfile();
-  }
+  saveStoredProfile(localStorage, state.profile);
 }
 
 function findSlot(slotId) {

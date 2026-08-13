@@ -1,4 +1,4 @@
-const CACHE_NAME = "client-show-console-v3-lab-ten-color";
+const CACHE_NAME = "client-show-console-v4-real-scene-ten-color";
 const SHELL_ASSETS = [
   "/console.html",
   "/console.css",
@@ -7,6 +7,8 @@ const SHELL_ASSETS = [
   "/index.html",
   "/src/console/app.js",
   "/src/console/profile.js",
+  "/src/console/profileStorage.js",
+  "/src/console/showModeGuard.js",
   "/src/console/entryGate.js",
   "/src/console/soundSelector.js",
   "/src/console/sampleStore.js",

@@ -10,16 +10,16 @@ const SUPPORTED_SCHEMA_VERSIONS = new Set([1, CONSOLE_SCHEMA_VERSION]);
 const SLOT_COUNT = 10;
 const FALLBACK_VOICES = new Set(["kick", "snare", "hat", "tom", "clap", "bell"]);
 const SLOT_DEFAULTS = [
-  { label: "粉色", color: "#ff89df", hue: 316, voice: "clap" },
-  { label: "宝蓝", color: "#295ada", hue: 223, voice: "kick" },
-  { label: "红色", color: "#e83433", hue: 0, voice: "snare" },
-  { label: "深青绿", color: "#075e5f", hue: 181, voice: "tom" },
-  { label: "天蓝", color: "#2394e4", hue: 204, voice: "hat" },
-  { label: "深棕", color: "#3f3a36", hue: 27, hueRange: 28, minSaturation: 0.06, voice: "bell" },
-  { label: "紫色", color: "#5b2ba4", hue: 264, voice: "clap" },
-  { label: "橙色", color: "#f49e13", hue: 37, voice: "tom" },
-  { label: "亮黄", color: "#ebde1d", hue: 56, voice: "snare" },
-  { label: "荧光绿", color: "#94db16", hue: 85, voice: "hat" },
+  { label: "粉色", color: "#ed77c0", hue: 323, hueRange: 16, minSaturation: 0.3, minValue: 0.32, voice: "clap" },
+  { label: "宝蓝", color: "#3b7bd4", hue: 215, hueRange: 16, minSaturation: 0.42, minValue: 0.25, voice: "kick" },
+  { label: "红色", color: "#c0332c", hue: 3, hueRange: 15, minSaturation: 0.42, minValue: 0.22, voice: "snare" },
+  { label: "深青绿", color: "#357575", hue: 180, hueRange: 18, minSaturation: 0.25, minValue: 0.16, voice: "tom" },
+  { label: "深蓝", color: "#2347d1", hue: 228, hueRange: 16, minSaturation: 0.42, minValue: 0.22, voice: "hat" },
+  { label: "深棕", color: "#595653", hue: 30, hueRange: 35, minSaturation: 0.02, maxSaturation: 0.3, minValue: 0.12, maxValue: 0.65, voice: "bell" },
+  { label: "紫色", color: "#692cc3", hue: 264, hueRange: 18, minSaturation: 0.42, minValue: 0.2, voice: "clap" },
+  { label: "橙色", color: "#ea9f39", hue: 35, hueRange: 16, minSaturation: 0.42, minValue: 0.28, voice: "tom" },
+  { label: "亮黄", color: "#f3f952", hue: 62, hueRange: 15, minSaturation: 0.35, minValue: 0.36, voice: "snare" },
+  { label: "荧光绿", color: "#b0e548", hue: 80, hueRange: 15, minSaturation: 0.35, minValue: 0.32, voice: "hat" },
 ];
 
 export function createDefaultProfile() {
@@ -120,8 +120,9 @@ function createDefaultSlot(index, defaults) {
       hueCenter: defaults.hue,
       hueRange: defaults.hueRange ?? 20,
       minSaturation: defaults.minSaturation ?? 0.35,
-      minValue: 0.18,
-      maxValue: 1,
+      maxSaturation: defaults.maxSaturation ?? 1,
+      minValue: defaults.minValue ?? 0.18,
+      maxValue: defaults.maxValue ?? 1,
     },
   };
 }
@@ -130,7 +131,8 @@ function normalizeSlot(value, defaults, index) {
   const source = isRecord(value) ? value : {};
   const id = cleanId(source.id, defaults.id || `slot-${index + 1}`);
   const label = cleanText(source.label, defaults.label, 48);
-  const sourceRule = isRecord(source.colorRule) ? source.colorRule : {};
+  const hasSourceRule = isRecord(source.colorRule);
+  const sourceRule = hasSourceRule ? source.colorRule : {};
   const fallbackVoice = FALLBACK_VOICES.has(source.fallbackVoice)
     ? source.fallbackVoice
     : defaults.fallbackVoice;
@@ -151,6 +153,12 @@ function normalizeSlot(value, defaults, index) {
       hueCenter: normalizeHue(numberOr(sourceRule.hueCenter, defaults.colorRule.hueCenter)),
       hueRange: clampNumber(sourceRule.hueRange, 0, 180, defaults.colorRule.hueRange),
       minSaturation: clampNumber(sourceRule.minSaturation, 0, 1, defaults.colorRule.minSaturation),
+      maxSaturation: clampNumber(
+        sourceRule.maxSaturation,
+        0,
+        1,
+        hasSourceRule ? 1 : defaults.colorRule.maxSaturation,
+      ),
       minValue: clampNumber(sourceRule.minValue, 0, 1, defaults.colorRule.minValue),
       maxValue: clampNumber(sourceRule.maxValue, 0, 1, defaults.colorRule.maxValue),
     },

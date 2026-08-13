@@ -187,9 +187,15 @@ export function detectColorPadsFromRgba(rgba, width, height, options = {}) {
 export function matchesColorRule(hsv, rule) {
   if (!rule || rule.enabled === false) return false;
   const minSaturation = numberOr(rule.minSaturation, 0);
+  const maxSaturation = numberOr(rule.maxSaturation, 1);
   const minValue = numberOr(rule.minValue, 0);
   const maxValue = numberOr(rule.maxValue, 1);
-  if (hsv.s < minSaturation || hsv.v < minValue || hsv.v > maxValue) return false;
+  if (
+    hsv.s < minSaturation
+    || hsv.s > maxSaturation
+    || hsv.v < minValue
+    || hsv.v > maxValue
+  ) return false;
 
   const center = normalizeHue(numberOr(rule.hueCenter, 0));
   const range = clamp(numberOr(rule.hueRange, 180), 0, 180);
@@ -207,7 +213,8 @@ export function createColorRuleFromSample(instrument, hsv, options = {}) {
     enabled: true,
     hueCenter: Math.round(normalizeHue(hsv.h)),
     hueRange,
-    minSaturation: clamp(hsv.s - saturationSlack, 0.18, 0.95),
+    minSaturation: clamp(hsv.s - saturationSlack, 0.01, 0.95),
+    maxSaturation: hsv.s < 0.3 ? clamp(hsv.s + 0.2, 0.12, 0.5) : 1,
     minValue: clamp(hsv.v - valueSlack, 0.08, 0.95),
     maxValue: 1,
   };
@@ -451,6 +458,7 @@ function normalizeColorRules(rules) {
       hueCenter: normalizeHue(numberOr(rule.hueCenter, 0)),
       hueRange: clamp(numberOr(rule.hueRange, 20), 0, 180),
       minSaturation: clamp(numberOr(rule.minSaturation, 0.45), 0, 1),
+      maxSaturation: clamp(numberOr(rule.maxSaturation, 1), 0, 1),
       minValue: clamp(numberOr(rule.minValue, 0.18), 0, 1),
       maxValue: clamp(numberOr(rule.maxValue, 1), 0, 1),
     }));
@@ -458,10 +466,26 @@ function normalizeColorRules(rules) {
 }
 
 function findMatchingRuleIndex(hsv, rules, options) {
+  return findBestColorRuleIndex(hsv, rules, options);
+}
+
+export function findBestColorRuleIndex(hsv, rules) {
+  const ranked = [];
   for (let i = 0; i < rules.length; i += 1) {
-    if (matchesColorRule(hsv, rules[i])) return i;
+    if (!matchesColorRule(hsv, rules[i])) continue;
+    const distance = hueDistance(hsv.h, rules[i].hueCenter);
+    const range = Number(rules[i].hueRange);
+    const score = range > 0 ? distance / range : (distance === 0 ? 0 : Infinity);
+    ranked.push({ index: i, distance, score });
   }
-  return -1;
+  ranked.sort((first, second) => first.score - second.score || first.distance - second.distance);
+  if (!ranked[0]) return -1;
+  if (
+    ranked[1]
+    && Math.abs(ranked[0].score - ranked[1].score) < 1e-9
+    && Math.abs(ranked[0].distance - ranked[1].distance) < 1e-9
+  ) return -1;
+  return ranked[0].index;
 }
 
 function averageHue(sin, cos) {

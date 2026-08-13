@@ -5,12 +5,14 @@ import {
   DEFAULT_COLOR_RULES,
   createColorRuleFromSample,
   detectColorPadsFromRgba,
+  findBestColorRuleIndex,
   hitTestPads,
   instrumentForHue,
   matchesColorRule,
   rgbToHsv,
   sampleColorRuleFromRgba,
 } from "../src/detection/colorSegmentation.js";
+import { activeColorRules, createDefaultProfile } from "../src/console/profile.js";
 
 function rgbaFrame(width, height, fill = [245, 245, 240, 255]) {
   const data = new Uint8ClampedArray(width * height * 4);
@@ -252,4 +254,76 @@ test("detectColorPadsFromRgba uses majority vote for the dominant rule", () => {
   assert.equal(pads.length, 1);
   assert.equal(pads[0].instrument, "snare");
   assert.equal(pads[0].area, 32);
+});
+
+test("detectColorPadsFromRgba maps the photographed ten-color palette to ten distinct default slots", () => {
+  const width = 64;
+  const height = 28;
+  const data = rgbaFrame(width, height, [246, 246, 244, 255]);
+  const colors = [
+    [237, 119, 192, 255],
+    [59, 123, 212, 255],
+    [192, 51, 44, 255],
+    [53, 117, 117, 255],
+    [35, 71, 209, 255],
+    [89, 86, 83, 255],
+    [105, 44, 195, 255],
+    [234, 159, 57, 255],
+    [243, 249, 82, 255],
+    [176, 229, 72, 255],
+  ];
+  colors.forEach((color, index) => {
+    const column = index % 5;
+    const row = Math.floor(index / 5);
+    fillRect(data, width, 3 + column * 12, 3 + row * 13, 6, 6, color);
+  });
+
+  const pads = detectColorPadsFromRgba(data, width, height, {
+    minArea: 16,
+    maxPads: 12,
+    colorRules: activeColorRules(createDefaultProfile()),
+  });
+
+  assert.equal(pads.length, 10);
+  assert.deepEqual(
+    [...new Set(pads.map((pad) => pad.instrument))].sort(),
+    Array.from({ length: 10 }, (_, index) => `slot-${index + 1}`).sort(),
+  );
+});
+
+test("overlapping HSV rules choose the nearest rule independent of declaration order", () => {
+  const first = {
+    id: "first",
+    instrument: "first",
+    label: "First",
+    enabled: true,
+    hueCenter: 27,
+    hueRange: 20,
+    minSaturation: 0.4,
+    maxSaturation: 1,
+    minValue: 0.2,
+    maxValue: 1,
+  };
+  const nearest = { ...first, id: "nearest", instrument: "nearest", hueCenter: 37 };
+  const hsv = { h: 35, s: 0.75, v: 0.9 };
+
+  assert.equal(findBestColorRuleIndex(hsv, [first, nearest]), 1);
+  assert.equal(findBestColorRuleIndex(hsv, [nearest, first]), 0);
+});
+
+test("default deep brown and orange rules separate equal-hue colors by saturation", () => {
+  const rules = activeColorRules(createDefaultProfile());
+  const orange = rgbToHsv(234, 159, 57);
+  const brown = rgbToHsv(89, 86, 83);
+
+  assert.equal(rules[findBestColorRuleIndex(orange, rules)].instrument, "slot-8");
+  assert.equal(rules[findBestColorRuleIndex(brown, rules)].instrument, "slot-6");
+});
+
+test("a sampled low-saturation brown rule still matches its source color", () => {
+  const brown = rgbToHsv(89, 86, 83);
+  const rule = createColorRuleFromSample("brown", brown, { hueRange: 24 });
+
+  assert.equal(matchesColorRule(brown, rule), true);
+  assert.ok(rule.maxSaturation < 0.5);
 });
