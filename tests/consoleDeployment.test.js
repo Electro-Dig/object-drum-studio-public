@@ -20,8 +20,12 @@ test("service worker caches the console shell and local runtime modules", () => 
     "/src/console/app.js",
     "/src/console/profile.js",
     "/src/console/audioEngine.js",
+    "/src/console/recognitionSession.js",
+    "/src/detection/calibratedColorDetector.js",
+    "/src/detection/colorMetrics.js",
     "/src/detection/colorSegmentation.js",
     "/src/detection/padTracker.js",
+    "/src/detection/trackColorResolver.js",
   ]) {
     assert.ok(serviceWorker.includes(`"${asset}"`), `${asset} should be cached`);
   }

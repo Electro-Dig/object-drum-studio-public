@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.0 - 2026-08-13
+
+### Features
+
+- Expand the client console to ten photo-matched color and sound slots with schema-v1 package migration.
+- Add empty-scene Lab background calibration, connected-component foreground detection, robust center sampling, nearest-prototype classification, ambiguity rejection, and three-of-five color voting.
+- Keep geometry track IDs stable across one-frame color changes so one object entry cannot retrigger because of color jitter.
+- Preserve HSV recognition as an explicit compatibility fallback before calibration.
+
+### Improvements
+
+- Add scene calibration status and a one-click empty-scene capture workflow for remote setup.
+- Move the new runtime modules into a fresh service-worker cache generation.
+- Prepare this version for a separate Netlify test site without changing the existing client-console deployment.
+
 ## 0.3.0 - 2026-07-17
 
 ### Features

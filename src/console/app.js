@@ -1,9 +1,7 @@
 import {
-  detectColorPadsFromRgba,
   rgbToHsv,
   sampleColorRuleFromRgba,
 } from "../detection/colorSegmentation.js";
-import { PadTracker } from "../detection/padTracker.js";
 import { ConsoleAudioEngine } from "./audioEngine.js";
 import { EntryGate } from "./entryGate.js";
 import {
@@ -18,8 +16,10 @@ import {
   readShowPackage,
 } from "./sampleStore.js";
 import { selectSoundSlot } from "./soundSelector.js";
+import { ConsoleRecognitionSession } from "./recognitionSession.js";
 
-const PROFILE_STORAGE_KEY = "object-drum-show-console-profile-v1";
+const PROFILE_STORAGE_KEY = "object-drum-show-console-profile-v2";
+const LEGACY_PROFILE_STORAGE_KEY = "object-drum-show-console-profile-v1";
 const PROCESS_WIDTH = 360;
 const DETECTION_INTERVAL_MS = 78;
 const MAX_EVENT_LOG = 7;
@@ -42,11 +42,14 @@ const els = {
   cameraCheck: document.querySelector("#cameraCheck"),
   audioCheck: document.querySelector("#audioCheck"),
   profileCheck: document.querySelector("#profileCheck"),
+  sceneCheck: document.querySelector("#sceneCheck"),
   cameraCheckText: document.querySelector("#cameraCheckText"),
   audioCheckText: document.querySelector("#audioCheckText"),
   profileCheckText: document.querySelector("#profileCheckText"),
+  sceneCheckText: document.querySelector("#sceneCheckText"),
   startCamera: document.querySelector("#startCameraButton"),
   armAudio: document.querySelector("#armAudioButton"),
+  captureBackground: document.querySelector("#captureBackgroundButton"),
   mappingMode: document.querySelector("#mappingModeSelect"),
   mappingModeHelp: document.querySelector("#mappingModeHelp"),
   profileName: document.querySelector("#profileNameInput"),
@@ -77,7 +80,8 @@ const entryGate = new EntryGate();
 
 const state = {
   profile: loadSavedProfile(),
-  tracker: null,
+  recognitionSession: null,
+  recognitionStatus: "needs-calibration",
   stream: null,
   cameraReady: false,
   live: false,
@@ -97,7 +101,7 @@ const state = {
 initialize();
 
 async function initialize() {
-  rebuildTracker();
+  rebuildRecognitionSession();
   wireEvents();
   renderAll();
   await restoreSampleRecords();
@@ -108,6 +112,7 @@ async function initialize() {
 function wireEvents() {
   els.startCamera.addEventListener("click", startCamera);
   els.armAudio.addEventListener("click", armAudio);
+  els.captureBackground.addEventListener("click", captureBackground);
   els.mappingMode.addEventListener("change", () => {
     state.profile.mappingMode = els.mappingMode.value;
     commitProfile({ resetTracking: true });
@@ -124,7 +129,10 @@ function wireEvents() {
   els.showMasterGain.addEventListener("input", () => updateMasterGain(els.showMasterGain.value));
   els.mirror.addEventListener("change", () => {
     state.profile.camera.mirror = els.mirror.checked;
-    commitProfile({ renderSlots: false });
+    state.recognitionSession.clearBackground();
+    state.recognitionStatus = "needs-calibration";
+    commitProfile({ resetTracking: true, renderSlots: false });
+    showToast("镜像方式已改变，请重新捕捉空场。", "error");
   });
   els.slotList.addEventListener("click", handleSlotClick);
   els.slotList.addEventListener("input", handleSlotInput);
@@ -164,12 +172,15 @@ async function startCamera() {
     await waitForVideoDimensions(els.cameraVideo);
     resizeCanvases();
     state.cameraReady = true;
+    state.lastProcessFrame = null;
+    state.recognitionSession.clearBackground();
+    state.recognitionStatus = "needs-calibration";
     els.stageIdle.hidden = true;
-    rebuildTracker();
+    rebuildRecognitionSession();
     startFrameLoop();
     syncSystemChecks();
     setRuntimeState(state.live ? "live" : "ready", state.live ? "正在运行" : "设备就绪", "摄像头画面已连接");
-    showToast("摄像头已连接，可以开始取色。", "success");
+    showToast("摄像头已连接。请清空画面并捕捉空场。", "success");
     return true;
   } catch (error) {
     state.cameraReady = false;
@@ -224,20 +235,42 @@ function processDetectionFrame(now) {
   drawCameraFrame(processContext, els.processCanvas.width, els.processCanvas.height);
   const frame = processContext.getImageData(0, 0, els.processCanvas.width, els.processCanvas.height);
   state.lastProcessFrame = frame;
-  const candidates = detectColorPadsFromRgba(
+  const result = state.recognitionSession.process(
     frame.data,
     els.processCanvas.width,
     els.processCanvas.height,
-    {
-      colorRules: activeColorRules(state.profile),
-      minArea: state.profile.recognition.minArea,
-      maxPads: 18,
-    },
+    now,
   );
-  state.pads = state.tracker.update(candidates, now);
+  const previousStatus = state.recognitionStatus;
+  state.recognitionStatus = result.status;
+  state.pads = result.pads;
+  if (result.status === "background-mismatch" && previousStatus !== result.status) {
+    entryGate.reset();
+    setRuntimeState("fault", "需要重拍空场", "灯光、机位或背景变化过大");
+    showToast("背景变化过大：请清空画面后重新捕捉空场。", "error");
+  }
+  if (previousStatus !== result.status) syncSystemChecks();
   const entries = entryGate.update(state.pads);
   els.objectCount.textContent = String(state.pads.length);
   if (state.live) triggerEntries(entries);
+}
+
+function captureBackground() {
+  if (!state.cameraReady || !state.lastProcessFrame) {
+    showToast("请先连接摄像头，等待画面出现后再捕捉空场。", "error");
+    return;
+  }
+  state.recognitionSession.captureBackground(
+    state.lastProcessFrame.data,
+    els.processCanvas.width,
+    els.processCanvas.height,
+  );
+  state.recognitionStatus = "ok";
+  state.pads = [];
+  entryGate.reset();
+  syncSystemChecks();
+  setRuntimeState(state.live ? "live" : "ready", state.live ? "正在运行" : "空场已捕捉", "可以逐色取样或开始演示");
+  showToast("空场已捕捉。现在可以把彩色物件放入画面。", "success");
 }
 
 function triggerEntries(entries) {
@@ -490,7 +523,8 @@ async function importProfilePackage(event) {
       showToast(`配置已导入，但本地音效保存失败：${error.message}`, "error");
     }
     if (audio.ready) await loadAllSamplesIntoAudio();
-    rebuildTracker();
+    rebuildRecognitionSession({ clearBackground: true });
+    state.recognitionStatus = "needs-calibration";
     saveProfile();
     renderAll();
     showToast(`已导入配置包：${state.profile.name}`, "success");
@@ -519,6 +553,9 @@ function enterShowMode() {
   if (activeColorRules(state.profile).length === 0) {
     showToast("至少需要启用一个颜色与声音槽位。", "error");
     return;
+  }
+  if (!state.recognitionSession.calibrated) {
+    showToast("尚未捕捉空场：将暂时使用 HSV 兼容识别。", "error");
   }
   state.mode = "show";
   state.live = false;
@@ -574,21 +611,20 @@ function updateMasterGain(value) {
   syncPrimaryControls();
 }
 
-function rebuildTracker() {
-  state.tracker = new PadTracker({
-    confirmFrames: state.profile.recognition.confirmFrames,
-    missingTtlMs: state.profile.recognition.missingTtlMs,
-    maxMatchDistance: 64,
-    minIoU: 0.035,
-    smoothing: 0.3,
-  });
+function rebuildRecognitionSession({ clearBackground = false } = {}) {
+  if (!state.recognitionSession) {
+    state.recognitionSession = new ConsoleRecognitionSession(state.profile);
+  } else {
+    if (clearBackground) state.recognitionSession.clearBackground();
+    state.recognitionSession.configure(state.profile);
+  }
   entryGate.reset();
   state.pads = [];
 }
 
 function commitProfile({ resetTracking = false, renderSlots = true } = {}) {
   state.profile = normalizeProfile(state.profile);
-  if (resetTracking) rebuildTracker();
+  if (resetTracking) rebuildRecognitionSession();
   saveProfile();
   syncPrimaryControls();
   syncSystemChecks();
@@ -616,7 +652,7 @@ function syncPrimaryControls() {
   els.showProfileName.textContent = profile.name;
   els.mappingModeHelp.textContent = profile.mappingMode === MAPPING_MODES.SAME_COLOR_RANDOM
     ? "只识别第一个启用槽位的颜色，每次从所有启用声音中随机选择。"
-    : "每种颜色固定对应一个声音，现场最容易控制。";
+    : "10 种颜色固定对应 10 个声音，现场最容易控制。";
 }
 
 function syncSystemChecks() {
@@ -624,9 +660,16 @@ function syncSystemChecks() {
   els.cameraCheck.dataset.ready = String(state.cameraReady);
   els.audioCheck.dataset.ready = String(audio.ready);
   els.profileCheck.dataset.ready = String(enabledSlots > 0);
+  const sceneReady = state.recognitionSession?.calibrated && state.recognitionStatus !== "background-mismatch";
+  els.sceneCheck.dataset.ready = String(sceneReady);
   els.cameraCheckText.textContent = state.cameraReady ? cameraLabel() : "未连接";
   els.audioCheckText.textContent = audio.ready ? "已启用" : "未启用";
   els.profileCheckText.textContent = `${enabledSlots} 个槽位`;
+  els.sceneCheckText.textContent = state.recognitionStatus === "background-mismatch"
+    ? "需重新捕捉"
+    : sceneReady ? "Lab 已标定" : "HSV 兼容识别";
+  els.captureBackground.disabled = !state.cameraReady;
+  els.captureBackground.textContent = sceneReady ? "重新捕捉空场" : "捕捉空场";
 }
 
 function renderSlots() {
@@ -636,11 +679,12 @@ function renderSlots() {
 
 function renderSlotsList() {
   const randomMode = state.profile.mappingMode === MAPPING_MODES.SAME_COLOR_RANDOM;
+  const randomRecognitionSlotId = state.profile.slots.find((slot) => slot.enabled)?.id;
   els.slotList.innerHTML = state.profile.slots.map((slot, index) => {
     const record = state.sampleRecords[slot.id];
     const soundName = record?.name || slot.soundName || `内置 ${slot.fallbackVoice}`;
     const isSampling = state.samplingSlotId === slot.id;
-    const randomSecondary = randomMode && index > 0;
+    const randomSecondary = randomMode && slot.id !== randomRecognitionSlotId;
     return `
       <article class="slot-card${isSampling ? " is-sampling" : ""}${randomSecondary ? " is-random-secondary" : ""}"
         data-slot-id="${escapeHtml(slot.id)}" data-enabled="${slot.enabled}" style="--slot-color: ${slot.colorHex}">
@@ -704,8 +748,13 @@ function saveProfile() {
 
 function loadSavedProfile() {
   try {
-    const value = localStorage.getItem(PROFILE_STORAGE_KEY);
-    return value ? normalizeProfile(JSON.parse(value)) : createDefaultProfile();
+    const currentValue = localStorage.getItem(PROFILE_STORAGE_KEY);
+    if (currentValue) return normalizeProfile(JSON.parse(currentValue));
+    const legacyValue = localStorage.getItem(LEGACY_PROFILE_STORAGE_KEY);
+    if (!legacyValue) return createDefaultProfile();
+    const migrated = normalizeProfile(JSON.parse(legacyValue));
+    localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(migrated));
+    return migrated;
   } catch {
     return createDefaultProfile();
   }

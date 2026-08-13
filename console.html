@@ -85,7 +85,7 @@
             <div class="section-number">01 / SYSTEM</div>
             <div class="section-heading">
               <h2>先让设备就绪</h2>
-              <p>更换电脑、摄像头或场地后，按顺序检查这三项。</p>
+              <p>更换电脑、摄像头或场地后，按顺序检查这四项；捕捉空场时请先移走全部物件。</p>
             </div>
 
             <div class="check-grid">
@@ -102,13 +102,19 @@
               <div id="profileCheck" class="check-item" data-ready="true">
                 <span>MAP</span>
                 <b>映射</b>
-                <small id="profileCheckText">6 个槽位</small>
+                <small id="profileCheckText">10 个槽位</small>
+              </div>
+              <div id="sceneCheck" class="check-item" data-ready="false">
+                <span>LAB</span>
+                <b>场景</b>
+                <small id="sceneCheckText">HSV 兼容识别</small>
               </div>
             </div>
 
             <div class="button-row">
               <button id="startCameraButton" class="button button--primary" type="button">连接 / 更换摄像头</button>
               <button id="armAudioButton" class="button button--secondary" type="button">启用声音</button>
+              <button id="captureBackgroundButton" class="button button--secondary" type="button" disabled>捕捉空场</button>
             </div>
           </section>
 
@@ -122,7 +128,7 @@
             <label class="field field--wide">
               <span>映射方式</span>
               <select id="mappingModeSelect">
-                <option value="six-color">6 色对应 6 音效</option>
+                <option value="ten-color">10 色对应 10 音效</option>
                 <option value="same-color-random">同色随机音效</option>
               </select>
             </label>

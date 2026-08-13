@@ -514,7 +514,7 @@ body[data-runtime-state="fault"] .live-banner__dot {
 
 .check-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 8px;
 }
 
@@ -573,6 +573,10 @@ body[data-runtime-state="fault"] .live-banner__dot {
   grid-template-columns: 1fr 1fr;
   gap: 8px;
   margin-top: 12px;
+}
+
+#captureBackgroundButton {
+  grid-column: 1 / -1;
 }
 
 .field {

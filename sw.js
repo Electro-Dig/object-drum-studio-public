@@ -1,4 +1,4 @@
-const CACHE_NAME = "client-show-console-v2";
+const CACHE_NAME = "client-show-console-v3-lab-ten-color";
 const SHELL_ASSETS = [
   "/console.html",
   "/console.css",
@@ -11,8 +11,12 @@ const SHELL_ASSETS = [
   "/src/console/soundSelector.js",
   "/src/console/sampleStore.js",
   "/src/console/audioEngine.js",
+  "/src/console/recognitionSession.js",
+  "/src/detection/calibratedColorDetector.js",
+  "/src/detection/colorMetrics.js",
   "/src/detection/colorSegmentation.js",
-  "/src/detection/padTracker.js"
+  "/src/detection/padTracker.js",
+  "/src/detection/trackColorResolver.js"
 ];
 
 self.addEventListener("install", (event) => {

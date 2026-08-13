@@ -13,6 +13,9 @@ test("client console exposes the complete remote-setup workflow", () => {
     "processCanvas",
     "startCameraButton",
     "armAudioButton",
+    "captureBackgroundButton",
+    "sceneCheck",
+    "sceneCheckText",
     "mappingModeSelect",
     "slotList",
     "profileImportInput",
@@ -41,4 +44,10 @@ test("client console loads its own stylesheet and application module", () => {
   assert.match(html, /rel="icon" href="\.\/favicon\.svg"/);
   assert.match(html, /src="\.\/src\/console\/app\.js"/);
   assert.doesNotMatch(html, /src="\.\/src\/app\.js"/);
+});
+
+test("client console presents ten-color mapping and an explicit empty-scene calibration step", () => {
+  assert.match(html, /value="ten-color">10 色对应 10 音效/);
+  assert.match(html, /捕捉空场/);
+  assert.doesNotMatch(html, />6 色对应 6 音效</);
 });
